@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+wechatpy
+pycryptodome
+python-dotenv
+requests
