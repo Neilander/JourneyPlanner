@@ -1,7 +1,7 @@
 # JourneyPlanner · AI 地图旅游规划 MVP
 
 > **省心、安心的智能旅程规划。**
-> 用户在**企业微信**里把心仪的房间、景点、小红书/去哪儿笔记随手转发给客服 → AI 帮你**汇总信息、读评论避雷、统筹每间房到各景点的距离** → 在 **H5 地图**上一眼看清谁离景点近、哪间房有雷点，帮你安心做决策。
+> 用户在**微信**里加上我们的**客服（云端机器人）**，把心仪的房间、景点、小红书/去哪儿笔记随手转发过去 → AI 帮你**汇总信息、读评论避雷、统筹每间房到各景点的距离** → 结果直接在会话里回（避雷图文 + 地图），帮你安心做决策。
 
 **目标**：2026 年暑假前上线，获取首批几千名种子用户。
 
@@ -41,11 +41,14 @@
 | AI 避雷 + 整合 | LLM API（DeepSeek / OpenAI / 其他）：读评论避雷 + 多源信息整合 | 待定 |
 | 距离统筹 | 房↔景点 距离/时间矩阵（高德 Web 服务 API） | 待定 |
 | 数据库 | SQLite 起步 → PostgreSQL | 待定 |
-| 前端 | Next.js + 地图 JS（Mapbox / 高德，二选一） | 待定 |
-| 地图能力 | 路径规划 / POI（高德 Web 服务 API） | 待定 |
-| 部署 | **腾讯云轻量应用服务器**（国内） | ✅ 已确定 |
+| 前端 | **Next.js 16 + React 19 + 高德地图 JS**（`@amap/amap-jsapi-loader`） | ✅ 已确定 |
+| 地图能力 | 路径规划 / POI / 静态地图（高德 Web 服务 API） | ✅ 已确定 |
+| 部署 · 前端 | **Cloudflare Pages**（连 GitHub 自动部署，绑 `trip.neiland.xyz`） | ✅ 已确定 |
+| 部署 · 后端 | **腾讯云轻量**（国内，微信客服回调 + 爬虫 + LLM，IP 回调免备案） | ✅ 已确定 |
 
 > 标「待定」的项会在阶段二确定功能与实现时敲定。
+> ⚠️ 前端 Next.js 16 是新版、有 breaking changes，写代码前先读 `frontend/AGENTS.md` 与新版文档，别用旧习惯硬写。
+> ⚠️ Next.js 16 部署到 Cloudflare Pages：纯静态/客户端渲染最省事；若用到服务端特性需 `@cloudflare/next-on-pages` 适配，且 Next 16 太新、适配工具可能滞后 —— 真部署时再处理。
 
 ---
 
@@ -63,15 +66,19 @@
 
 ---
 
-## 规划中的目录结构
+## 目录结构
 
 ```
 JourneyPlanner/
 ├── README.md                 # 项目总纲（本文件）
 ├── docs/
-│   └── SETUP-phase1.md       # 阶段一：云端 ↔ 企业微信 搭建指南
-├── backend/                  # FastAPI（阶段一：最小回调；阶段二：业务逻辑）
-└── frontend/                 # Next.js + 地图 H5（阶段二）
+│   └── SETUP-phase1.md       # 阶段一：微信客服 ↔ 云端 搭建指南
+├── backend/                  # FastAPI
+│   ├── main.py               # 微信客服回调 + sync_msg 拉消息（当前：打印小程序卡片 pagepath）
+│   ├── requirements.txt
+│   └── .env.example          # WECOM_CORP_ID / KF_SECRET / TOKEN / AES_KEY
+└── frontend/                 # Next.js 16 + React 19 + 高德地图 JS
+    └── app/                  # App Router 页面
 ```
 
 ---

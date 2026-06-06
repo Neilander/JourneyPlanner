@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import AMapLoader from '@amap/amap-jsapi-loader'
 
 const AMAP_KEY = 'f65273afda7993a2685b0337410b8777'
 const AMAP_SECRET = '028c0157e51b8eacd67d72d15161b634'
@@ -40,8 +39,13 @@ export default function Home() {
   const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
-    ;(window as any)._AMapSecurityConfig = { securityJsCode: AMAP_SECRET }
-    AMapLoader.load({ key: AMAP_KEY, version: '2.0' }).then((AMap: any) => {
+    let cancelled = false
+    ;(async () => {
+      // 动态 import：只在浏览器里加载高德库，避免静态导出预渲染时碰 window
+      const AMapLoader = (await import('@amap/amap-jsapi-loader')).default
+      ;(window as any)._AMapSecurityConfig = { securityJsCode: AMAP_SECRET }
+      const AMap = await AMapLoader.load({ key: AMAP_KEY, version: '2.0' })
+      if (cancelled) return
       AMapRef.current = AMap
       const map = new AMap.Map(containerRef.current, {
         center: XIAN_CENTER,
@@ -58,8 +62,8 @@ export default function Home() {
         })
         marker.setMap(map)
       })
-    })
-    return () => mapRef.current?.destroy()
+    })()
+    return () => { cancelled = true; mapRef.current?.destroy() }
   }, [])
 
   const toggleSelect = (id: string) => {
