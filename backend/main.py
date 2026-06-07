@@ -23,10 +23,20 @@ app.add_middleware(
 crypto = WeChatCrypto(TOKEN, AES_KEY, CORP_ID)
 _cursor = None
 
+PLAN_KEYWORDS = ["酒店", "住", "规划", "行程", "景点", "旅游", "旅行", "攻略", "住哪", "去哪", "西安"]
+H5_URL = "https://trip.neiland.xyz"
+
 def get_access_token():
     r = requests.get("https://qyapi.weixin.qq.com/cgi-bin/gettoken",
                      params={"corpid": CORP_ID, "corpsecret": KF_SECRET}).json()
     return r.get("access_token", "")
+
+def send_text(open_kfid: str, user_id: str, text: str):
+    token = get_access_token()
+    requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg",
+                  params={"access_token": token},
+                  json={"touser": user_id, "open_kfid": open_kfid,
+                        "msgtype": "text", "text": {"content": text}})
 
 @app.get("/wecom/callback")
 async def verify(msg_signature: str, timestamp: str, nonce: str, echostr: str):
@@ -50,11 +60,19 @@ async def receive(request: Request, msg_signature: str, timestamp: str, nonce: s
     print("sync_msg响应:", json.dumps(resp, ensure_ascii=False))
     _cursor = resp.get("next_cursor", _cursor)
     for m in resp.get("msg_list", []):
-        print("=== 消息类型:", m.get("msgtype"))
-        if m.get("msgtype") == "miniprogram":
-            print("★【小程序卡片】", json.dumps(m["miniprogram"], ensure_ascii=False, indent=2))
+        print("=== 消息类型:", m.get("msgtype"), json.dumps(m, ensure_ascii=False))
+        if m.get("msgtype") != "text":
+            continue
+        user_id = m.get("external_userid") or m.get("open_id", "")
+        text = m.get("text", {}).get("content", "")
+        if any(kw in text for kw in PLAN_KEYWORDS):
+            send_text(open_kf_id, user_id,
+                      f"你好！点击下方链接开始规划西安行程 👇\n{H5_URL}\n\n"
+                      "可以搜索候选酒店，选择想去的景点，查看通勤时间排行～")
         else:
-            print(json.dumps(m, ensure_ascii=False, indent=2))
+            send_text(open_kf_id, user_id,
+                      "你好！我是西安旅行规划助手 🗺️\n"
+                      "告诉我你想去哪些景点或者想找什么酒店，我来帮你规划行程！")
     return Response(content="success")
 
 
