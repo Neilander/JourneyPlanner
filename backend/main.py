@@ -1,7 +1,7 @@
 import os, json
 import xml.etree.ElementTree as ET
 import requests
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from wechatpy.enterprise.crypto import WeChatCrypto
@@ -66,16 +66,8 @@ def send_text(open_kfid: str, user_id: str, text: str):
 async def verify(msg_signature: str, timestamp: str, nonce: str, echostr: str):
     return Response(content=crypto.check_signature(msg_signature, timestamp, nonce, echostr))
 
-@app.post("/wecom/callback")
-async def receive(request: Request, msg_signature: str, timestamp: str, nonce: str):
+def process_messages(sync_token: str, open_kf_id: str):
     global _cursor
-    body = await request.body()
-    xml = crypto.decrypt_message(body, msg_signature, timestamp, nonce)
-    root = ET.fromstring(xml)
-    sync_token = root.findtext("Token")
-    open_kf_id = root.findtext("OpenKfId")
-    if not sync_token:
-        return Response(content="success")
     payload = {"token": sync_token, "open_kfid": open_kf_id, "limit": 1000}
     if _cursor:
         payload["cursor"] = _cursor
@@ -102,6 +94,17 @@ async def receive(request: Request, msg_signature: str, timestamp: str, nonce: s
             send_text(open_kf_id, user_id,
                       "你好！我是西安旅行规划助手 🗺️\n"
                       "告诉我你想去哪些景点或者想找什么酒店，我来帮你规划行程！")
+
+@app.post("/wecom/callback")
+async def receive(request: Request, background_tasks: BackgroundTasks,
+                  msg_signature: str, timestamp: str, nonce: str):
+    body = await request.body()
+    xml = crypto.decrypt_message(body, msg_signature, timestamp, nonce)
+    root = ET.fromstring(xml)
+    sync_token = root.findtext("Token")
+    open_kf_id = root.findtext("OpenKfId")
+    if sync_token:
+        background_tasks.add_task(process_messages, sync_token, open_kf_id)
     return Response(content="success")
 
 
