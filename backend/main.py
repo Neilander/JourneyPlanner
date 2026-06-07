@@ -22,6 +22,7 @@ app.add_middleware(
 )
 crypto = WeChatCrypto(TOKEN, AES_KEY, CORP_ID)
 _cursor = None
+_processed_msg_ids: set = set()
 
 PLAN_KEYWORDS = ["酒店", "住", "规划", "行程", "景点", "旅游", "旅行", "攻略", "住哪", "去哪", "西安"]
 H5_URL = "https://trip.neiland.xyz"
@@ -83,6 +84,11 @@ async def receive(request: Request, msg_signature: str, timestamp: str, nonce: s
     print("sync_msg响应:", json.dumps(resp, ensure_ascii=False))
     _cursor = resp.get("next_cursor", _cursor)
     for m in resp.get("msg_list", []):
+        msg_id = m.get("msgid", "")
+        if msg_id and msg_id in _processed_msg_ids:
+            continue
+        if msg_id:
+            _processed_msg_ids.add(msg_id)
         print("=== 消息类型:", m.get("msgtype"), json.dumps(m, ensure_ascii=False))
         if m.get("msgtype") != "text":
             continue
