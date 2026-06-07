@@ -32,9 +32,11 @@ def get_access_token():
     return r.get("access_token", "")
 
 def accept_session(open_kfid: str, user_id: str, token: str):
-    r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/session/accept",
+    # Transition session to robot state (service_state=3) so we can send messages
+    r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/trans",
                       params={"access_token": token},
-                      json={"open_kfid": open_kfid, "external_userid": user_id})
+                      json={"open_kfid": open_kfid, "external_userid": user_id,
+                            "service_state": 3})
     print("accept_session:", r.text)
 
 def send_text(open_kfid: str, user_id: str, text: str):
