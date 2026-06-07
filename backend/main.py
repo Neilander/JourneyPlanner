@@ -41,13 +41,13 @@ def ensure_session(open_kfid: str, user_id: str, token: str):
     service_state = state.get("service_state", -1)
     # If unassigned (0), transition to robot (1) or directly to ended (4) then re-open
     # If ended (4) or robot (1), we can send directly
-    if service_state == 0:
-        # Assign to robot接待
+    if service_state in (0, 2):
+        # End session so we can send as bot
         r2 = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/trans",
                            params={"access_token": token},
                            json={"open_kfid": open_kfid, "external_userid": user_id,
-                                 "service_state": 1})
-        print("trans to robot:", r2.text)
+                                 "service_state": 4})
+        print("trans to ended:", r2.text)
 
 def send_text(open_kfid: str, user_id: str, text: str):
     token = get_access_token()
