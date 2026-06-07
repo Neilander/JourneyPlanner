@@ -31,17 +31,27 @@ def get_access_token():
                      params={"corpid": CORP_ID, "corpsecret": KF_SECRET}).json()
     return r.get("access_token", "")
 
-def accept_session(open_kfid: str, user_id: str, token: str):
-    # Transition session to robot state (service_state=3) so we can send messages
-    r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/trans",
+def ensure_session(open_kfid: str, user_id: str, token: str):
+    # Get current session state
+    r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/get",
                       params={"access_token": token},
-                      json={"open_kfid": open_kfid, "external_userid": user_id,
-                            "service_state": 3})
-    print("accept_session:", r.text)
+                      json={"open_kfid": open_kfid, "external_userid": user_id})
+    state = r.json()
+    print("session state:", state)
+    service_state = state.get("service_state", -1)
+    # If unassigned (0), transition to robot (1) or directly to ended (4) then re-open
+    # If ended (4) or robot (1), we can send directly
+    if service_state == 0:
+        # Assign to robot接待
+        r2 = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/trans",
+                           params={"access_token": token},
+                           json={"open_kfid": open_kfid, "external_userid": user_id,
+                                 "service_state": 1})
+        print("trans to robot:", r2.text)
 
 def send_text(open_kfid: str, user_id: str, text: str):
     token = get_access_token()
-    accept_session(open_kfid, user_id, token)
+    ensure_session(open_kfid, user_id, token)
     r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg",
                       params={"access_token": token},
                       json={"touser": user_id, "open_kfid": open_kfid,
