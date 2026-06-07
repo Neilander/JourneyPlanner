@@ -5,7 +5,7 @@ let AMapLoader: any = null
 
 const AMAP_KEY = 'f65273afda7993a2685b0337410b8777'
 const AMAP_SECRET = '028c0157e51b8eacd67d72d15161b634'
-const API_BASE = 'https://api.neilland.xyz'
+const API_BASE = 'https://api.neiland.xyz'
 
 const XIAN_CENTER: [number, number] = [108.9398, 34.3416]
 
