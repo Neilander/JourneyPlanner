@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+let AMapLoader: any = null
 
 const AMAP_KEY = 'f65273afda7993a2685b0337410b8777'
 const AMAP_SECRET = '028c0157e51b8eacd67d72d15161b634'
-const API_BASE = 'http://119.45.235.102'
+const API_BASE = 'https://api.neilland.xyz'
 
 const XIAN_CENTER: [number, number] = [108.9398, 34.3416]
 
@@ -25,12 +26,28 @@ interface Hotel {
   lat: number
 }
 
+// Haversine distance in km
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// Estimate walking minutes from km (avg 5 km/h)
+function toMinutes(km: number) {
+  return Math.round(km / 5 * 60)
+}
+
 export default function Home() {
   const mapRef = useRef<any>(null)
   const AMapRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hotelMarkersRef = useRef<any[]>([])
 
+  const [tab, setTab] = useState<'map' | 'rank'>('map')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [searchKeyword, setSearchKeyword] = useState('')
@@ -41,26 +58,26 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      // 动态 import：只在浏览器里加载高德库，避免静态导出预渲染时碰 window
-      const AMapLoader = (await import('@amap/amap-jsapi-loader')).default
       ;(window as any)._AMapSecurityConfig = { securityJsCode: AMAP_SECRET }
-      const AMap = await AMapLoader.load({ key: AMAP_KEY, version: '2.0' })
-      if (cancelled) return
-      AMapRef.current = AMap
-      const map = new AMap.Map(containerRef.current, {
-        center: XIAN_CENTER,
-        zoom: 13,
-        mapStyle: 'amap://styles/whitesmoke',
-      })
-      mapRef.current = map
-
-      ATTRACTIONS.forEach(a => {
-        const marker = new AMap.Marker({
-          position: [a.lng, a.lat],
-          title: a.name,
-          label: { content: `<div class="text-xs bg-white px-1 rounded shadow">${a.name}</div>`, direction: 'top' },
+      if (!AMapLoader) AMapLoader = (await import('@amap/amap-jsapi-loader')).default
+      AMapLoader.load({ key: AMAP_KEY, version: '2.0' }).then((AMap: any) => {
+        if (cancelled) return
+        AMapRef.current = AMap
+        const map = new AMap.Map(containerRef.current, {
+          center: XIAN_CENTER,
+          zoom: 13,
+          mapStyle: 'amap://styles/whitesmoke',
         })
-        marker.setMap(map)
+        mapRef.current = map
+
+        ATTRACTIONS.forEach(a => {
+          const marker = new AMap.Marker({
+            position: [a.lng, a.lat],
+            title: a.name,
+            label: { content: `<div class="text-xs bg-white px-1 rounded shadow">${a.name}</div>`, direction: 'top' },
+          })
+          marker.setMap(map)
+        })
       })
     })()
     return () => { cancelled = true; mapRef.current?.destroy() }
@@ -113,20 +130,45 @@ export default function Home() {
     map.setCenter([hotel.lng, hotel.lat])
   }
 
+  // Compute ranking based on selected attractions
+  const ranking = useMemo(() => {
+    if (hotels.length === 0 || selected.size === 0) return []
+    const targets = ATTRACTIONS.filter(a => selected.has(a.id))
+    return hotels
+      .map(h => {
+        const times = targets.map(a => toMinutes(distanceKm(h.lat, h.lng, a.lat, a.lng)))
+        const avg = Math.round(times.reduce((s, t) => s + t, 0) / times.length)
+        return { hotel: h, avg, times, targets }
+      })
+      .sort((a, b) => a.avg - b.avg)
+  }, [hotels, selected])
+
+  const selectedAttractions = ATTRACTIONS.filter(a => selected.has(a.id))
+
   return (
     <div className="flex flex-col h-screen bg-gray-900">
-      {/* 顶部 */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-800 text-white">
         <span className="font-bold text-lg">西安</span>
-        <button
-          onClick={() => setShowSearch(true)}
-          className="text-sm bg-orange-500 px-3 py-1 rounded-full"
-        >
-          + 添加酒店
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-gray-700 rounded-full p-0.5 text-sm">
+            <button
+              onClick={() => setTab('map')}
+              className={`px-3 py-1 rounded-full transition-colors ${tab === 'map' ? 'bg-white text-gray-900 font-medium' : 'text-gray-400'}`}
+            >地图</button>
+            <button
+              onClick={() => setTab('rank')}
+              className={`px-3 py-1 rounded-full transition-colors ${tab === 'rank' ? 'bg-white text-gray-900 font-medium' : 'text-gray-400'}`}
+            >排行榜</button>
+          </div>
+          <button
+            onClick={() => setShowSearch(true)}
+            className="text-sm bg-orange-500 px-3 py-1 rounded-full"
+          >+ 添加酒店</button>
+        </div>
       </div>
 
-      {/* 搜索弹窗 */}
+      {/* Search modal */}
       {showSearch && (
         <div className="absolute inset-0 bg-black/60 z-50 flex flex-col">
           <div className="bg-white m-4 mt-16 rounded-xl overflow-hidden flex flex-col max-h-[70vh]">
@@ -165,10 +207,56 @@ export default function Home() {
         </div>
       )}
 
-      {/* 地图 */}
-      <div ref={containerRef} className="flex-1 w-full" />
+      {/* Map */}
+      <div
+        ref={containerRef}
+        className="flex-1 w-full"
+        style={{ visibility: tab === 'map' ? 'visible' : 'hidden', position: tab === 'map' ? 'relative' : 'absolute', width: '100%', flex: tab === 'map' ? '1' : '0' }}
+      />
 
-      {/* 底部景点选择 */}
+      {/* Ranking */}
+      {tab === 'rank' && (
+        <div className="flex-1 overflow-y-auto bg-gray-900 px-4 py-3">
+          {selected.size === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
+              <p>选择想去的景点</p>
+              <p className="mt-1">查看酒店通勤排行</p>
+            </div>
+          ) : hotels.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
+              <p>还没有候选酒店</p>
+              <button onClick={() => { setTab('map'); setShowSearch(true) }} className="mt-2 text-orange-400">+ 添加酒店</button>
+            </div>
+          ) : (
+            <>
+              <p className="text-gray-400 text-xs mb-3">
+                按平均步行距离排序（直线估算）· 已选 {selected.size} 个景点
+              </p>
+              {ranking.map((item, i) => (
+                <div key={item.hotel.id} className="bg-gray-800 rounded-xl p-4 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-sm font-bold w-6 text-center ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
+                      {i + 1}
+                    </span>
+                    <span className="text-white font-medium text-sm flex-1">{item.hotel.name}</span>
+                    <span className="text-orange-400 font-bold text-sm">avg {item.avg} min</span>
+                  </div>
+                  <div className="ml-8 space-y-1">
+                    {item.targets.map((a, j) => (
+                      <div key={a.id} className="flex justify-between text-xs text-gray-400">
+                        <span>{a.name}</span>
+                        <span>{item.times[j]} min</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Bottom attraction selector */}
       <div className="bg-gray-800 px-3 py-3">
         <p className="text-gray-400 text-xs mb-2">
           {hotels.length > 0 ? `已导入 ${hotels.length} 家酒店 · ` : ''}选择景点查看通勤
