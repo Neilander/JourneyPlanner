@@ -31,12 +31,20 @@ def get_access_token():
                      params={"corpid": CORP_ID, "corpsecret": KF_SECRET}).json()
     return r.get("access_token", "")
 
+def accept_session(open_kfid: str, user_id: str, token: str):
+    r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/session/accept",
+                      params={"access_token": token},
+                      json={"open_kfid": open_kfid, "external_userid": user_id})
+    print("accept_session:", r.json())
+
 def send_text(open_kfid: str, user_id: str, text: str):
     token = get_access_token()
-    requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg",
-                  params={"access_token": token},
-                  json={"touser": user_id, "open_kfid": open_kfid,
-                        "msgtype": "text", "text": {"content": text}})
+    accept_session(open_kfid, user_id, token)
+    r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg",
+                      params={"access_token": token},
+                      json={"touser": user_id, "open_kfid": open_kfid,
+                            "msgtype": "text", "text": {"content": text}})
+    print("send_msg:", r.json())
 
 @app.get("/wecom/callback")
 async def verify(msg_signature: str, timestamp: str, nonce: str, echostr: str):
