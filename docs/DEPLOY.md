@@ -87,6 +87,10 @@ npm run build      # push 前自测，能过再 push
 
 ## 待修的坑(按优先级)
 1. 🔴 **高德密钥泄露**:`page.tsx` 里 `AMAP_SECRET` 明文,前端可见 → **轮换密钥** + 走后端代理或域名白名单。
-2. 🟠 **mixed content**:前端是 `https`,但调的后端是 `http://119.45.235.102`,浏览器会拦(搜索功能现在就是因此失效)→ 后端要上 `https`(建议给后端绑 `api.neiland.xyz` 走 Cloudflare)。
+2. 🟠 **mixed content**:前端是 `https`,但调的后端是 `http://119.45.235.102`,浏览器会拦(搜索功能现在就是因此失效)→ 后端要上 `https`。
+   - 做法:给后端绑子域名 `api.neiland.xyz`(Cloudflare DNS:A 记录 `api`→`119.45.235.102`,橙云开)。
+   - 🔴 **不要用全局 Flexible SSL 模式**:那是整个域名级别的降级、Cloudflare 也不推荐(源站明文)。
+   - ✅ 正道:SSL 保持 `Full`,在服务器装 **Cloudflare Origin 证书**(免费)+ nginx 走 https;或用 **Cloudflare Tunnel**(源站零证书、零公网端口,更安全)。
+   - 后端别忘了开 CORS:`allow_origins` 含 `https://trip.neiland.xyz`。
 3. 🟠 **仓库后端 ≠ 线上后端**:`backend/main.py` 只有微信客服回调,但线上 `119.45.235.102` 有 `/api/poi/search` → 把线上后端代码提交进仓库,前后端对齐。
 4. ⚠️ **备案/微信内打开**:`trip.neiland.xyz` 是 Cloudflare 海外、未备案,**在微信内打开会被拦/很慢**。产品形态待定(结果在客服会话回图文 vs 备案后微信内开 H5)。
