@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>携程酒店分享 → 地图 Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 12px; }
+  h1 { font-size: 16px; margin-bottom: 8px; }
+  textarea { width: 100%; height: 96px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; resize: vertical; }
+  button { width: 100%; padding: 11px; margin-top: 8px; background: #f97316; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; }
+  #info { background: #fff; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 13px; line-height: 1.7; }
+  #info b { color: #f97316; }
+  .tag { display:inline-block; background:#fff3e9; color:#f97316; padding:1px 6px; border-radius:4px; font-size:12px; }
+  #map { width: 100%; height: 360px; margin-top: 8px; border-radius: 8px; overflow: hidden; }
+</style>
+<script>window._AMapSecurityConfig = { securityJsCode: '028c0157e51b8eacd67d72d15161b634' };</script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=f65273afda7993a2685b0337410b8777&plugin=AMap.PlaceSearch"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>携程酒店分享 → 地图 Demo</h1>
+  <textarea id="input">#携程旅行#分享酒店：&lt;上海&gt;&lt;上海绿发JW万豪侯爵酒店&gt;这家豪华型酒店4.8分,超棒,!打开有惊喜,@携程旅行网,https://m.ctrip.com/webapp/hotels/detail?hotelid=42165326&atime=20260607</textarea>
+  <button onclick="run()">解析并在地图上定位</button>
+  <div id="info">粘贴携程分享文本，点上面按钮</div>
+  <div id="map"></div>
+</div>
+<script>
+var map = new AMap.Map('map', { zoom: 11, center: [121.47, 31.23] });
+
+// 从携程分享文本里抠出字段
+function parse(text) {
+  var pair = text.match(/[<＜]([^<>＜＞]+)[>＞]\s*[<＜]([^<>＜＞]+)[>＞]/);
+  return {
+    city:    pair ? pair[1].trim() : '',
+    name:    pair ? pair[2].trim() : '',
+    rating:  (text.match(/([0-9](?:\.[0-9])?)\s*分/) || [])[1] || '',
+    hotelId: (text.match(/hotelid=(\d+)/i) || [])[1] || '',
+    url:     (text.match(/https?:\/\/[^\s]+/) || [])[0] || ''
+  };
+}
+
+function run() {
+  var d = parse(document.getElementById('input').value);
+  document.getElementById('info').innerHTML =
+    '城市：<b>' + d.city + '</b>　评分：<span class="tag">' + d.rating + '分</span><br>' +
+    '酒店：<b>' + d.name + '</b><br>' +
+    'hotelId：' + d.hotelId + '（以后爬评论用）<br>' +
+    '<span style="color:#999">正在用高德定位…</span>';
+
+  var ps = new AMap.PlaceSearch({ city: d.city, citylimit: true });
+  ps.search(d.name, function (status, result) {
+    if (status === 'complete' && result.poiList && result.poiList.pois.length) {
+      var p = result.poiList.pois[0];
+      var lng = p.location.lng, lat = p.location.lat;
+      map.clearMap();
+      new AMap.Marker({ position: [lng, lat], title: d.name }).setMap(map);
+      map.setCenter([lng, lat]); map.setZoom(15);
+      document.getElementById('info').innerHTML =
+        '城市：<b>' + d.city + '</b>　评分：<span class="tag">' + d.rating + '分</span><br>' +
+        '酒店：<b>' + d.name + '</b><br>' +
+        'hotelId：' + d.hotelId + '<br>' +
+        '✅ 高德定位：' + p.address + '<br>' +
+        '经纬度：<b>' + lng.toFixed(5) + ', ' + lat.toFixed(5) + '</b>';
+    } else {
+      var detail = (typeof result === 'string') ? result : JSON.stringify(result);
+      document.getElementById('info').innerHTML +=
+        '<br>❌ 高德搜索失败 — status：<b>' + status + '</b>' +
+        '<br><span style="font-size:11px;color:#999;word-break:break-all">' + detail.slice(0, 200) + '</span>';
+    }
+  });
+}
+</script>
+</body>
+</html>

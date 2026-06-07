@@ -37,7 +37,7 @@
 | --- | --- | --- |
 | 入口 | **微信客服**（C 端用户在微信里加客服，云端机器人；回调 + `sync_msg` 拉消息） | ✅ 已确定 |
 | 后端 | Python **FastAPI** | ✅ 已确定 |
-| 信息汇总/解析 | 携程只给**小程序卡片** → 抠 `pagepath` 里的 hotelId → 拼携程 web URL 爬取；小红书/去哪儿走链接。requests + BeautifulSoup | 待验证 |
+| 信息汇总/解析 | 携程**酒店有链接**(解析 hotelId→爬)；携程**民宿只给小程序卡片**(微信客服收不到→待研究)；其他 App 逐个跑通。详见 [INPUT-SOURCES.md](docs/INPUT-SOURCES.md) | 进行中 |
 | AI 避雷 + 整合 | LLM API（DeepSeek / OpenAI / 其他）：读评论避雷 + 多源信息整合 | 待定 |
 | 距离统筹 | 房↔景点 距离/时间矩阵（高德 Web 服务 API） | 待定 |
 | 数据库 | SQLite 起步 → PostgreSQL | 待定 |
