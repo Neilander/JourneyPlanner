@@ -35,7 +35,7 @@ def accept_session(open_kfid: str, user_id: str, token: str):
     r = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/session/accept",
                       params={"access_token": token},
                       json={"open_kfid": open_kfid, "external_userid": user_id})
-    print("accept_session:", r.json())
+    print("accept_session:", r.text)
 
 def send_text(open_kfid: str, user_id: str, text: str):
     token = get_access_token()
