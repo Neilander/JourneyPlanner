@@ -1,4 +1,4 @@
-import os, json, re, sqlite3
+import os, json, re, sqlite3, threading
 import xml.etree.ElementTree as ET
 import requests
 from fastapi import FastAPI, Request, Response, BackgroundTasks
@@ -51,6 +51,10 @@ def init_db():
             key   TEXT PRIMARY KEY,
             value TEXT
         );
+        CREATE TABLE IF NOT EXISTS processed_msgs (
+            msgid TEXT PRIMARY KEY,
+            ts    DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         """)
 
 init_db()
@@ -64,6 +68,16 @@ def kv_set(key: str, value: str):
     with get_db() as conn:
         conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (key, value))
         conn.commit()
+
+def is_processed(msgid: str) -> bool:
+    """检查msgid是否已处理过，是则返回True，否则写入并返回False"""
+    try:
+        with get_db() as conn:
+            conn.execute("INSERT INTO processed_msgs (msgid) VALUES (?)", (msgid,))
+            conn.commit()
+            return False
+    except sqlite3.IntegrityError:
+        return True
 
 def get_or_create_user(wecom_id: str) -> sqlite3.Row:
     with get_db() as conn:
@@ -269,7 +283,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 crypto = WeChatCrypto(TOKEN, AES_KEY, CORP_ID)
-_processed_msg_ids: set = set()
+_process_lock = threading.Lock()
 
 def get_access_token():
     r = requests.get("https://qyapi.weixin.qq.com/cgi-bin/gettoken",
@@ -305,24 +319,22 @@ def send_text(open_kfid: str, user_id: str, text: str):
     print("send_msg:", r.json())
 
 def process_messages(sync_token: str, open_kf_id: str):
-    cursor = kv_get("sync_cursor")
-    payload = {"token": sync_token, "open_kfid": open_kf_id, "limit": 1000}
-    if cursor:
-        payload["cursor"] = cursor
-    resp = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg",
-                         params={"access_token": get_access_token()}, json=payload).json()
-    print("sync_msg:", json.dumps(resp, ensure_ascii=False))
-    next_cursor = resp.get("next_cursor")
-    if next_cursor:
-        kv_set("sync_cursor", next_cursor)
-    for m in resp.get("msg_list", []):
-        msg_id = m.get("msgid", "")
-        if msg_id and msg_id in _processed_msg_ids:
-            continue
-        if msg_id:
-            _processed_msg_ids.add(msg_id)
-        msgtype = m.get("msgtype", "")
-        user_id = m.get("external_userid", "")
+    with _process_lock:
+        cursor = kv_get("sync_cursor")
+        payload = {"token": sync_token, "open_kfid": open_kf_id, "limit": 1000}
+        if cursor:
+            payload["cursor"] = cursor
+        resp = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg",
+                             params={"access_token": get_access_token()}, json=payload).json()
+        next_cursor = resp.get("next_cursor")
+        if next_cursor:
+            kv_set("sync_cursor", next_cursor)
+        for m in resp.get("msg_list", []):
+            msg_id = m.get("msgid", "")
+            if msg_id and is_processed(msg_id):
+                continue
+            msgtype = m.get("msgtype", "")
+            user_id = m.get("external_userid", "")
         if not user_id:
             continue
         print("=== msg:", msgtype, json.dumps(m, ensure_ascii=False))
