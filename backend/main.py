@@ -145,7 +145,7 @@ def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None
     try:
         r = requests.get("https://restapi.amap.com/v3/place/text", params={
             "key": AMAP_WEB_KEY, "keywords": name, "city": city,
-            "citylimit": "true", "offset": 1, "output": "json",
+            "citylimit": "true", "types": "050000", "offset": 1, "output": "json",
         }, timeout=5).json()
         pois = r.get("pois", [])
         if pois:
@@ -223,6 +223,17 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
     if intent == "import":
         ctrip = parse_ctrip_text(text)
         if ctrip:
+            # 同一hotelId不重复入库
+            if ctrip["hotel_id"]:
+                with get_db() as conn:
+                    exists = conn.execute(
+                        "SELECT id FROM hotels WHERE user_id=? AND hotel_id=?",
+                        (user["id"], ctrip["hotel_id"])
+                    ).fetchone()
+                if exists:
+                    send_text(open_kfid, user_id,
+                        f"「{ctrip['name']}」已经在候选名单里了～\n当前候选酒店：{hotel_count} 家")
+                    return
             # 剥掉括号/特殊符号后取前段，提高高德命中率
             clean = re.split(r'[｜|（(]', ctrip["name"])[0].strip()
             clean = re.sub(r'[·•\s]+', ' ', clean).strip()
@@ -375,7 +386,7 @@ async def receive(request: Request, background_tasks: BackgroundTasks,
 async def poi_search(keyword: str, city: str = "西安"):
     r = requests.get("https://restapi.amap.com/v3/place/text", params={
         "key": AMAP_WEB_KEY, "keywords": keyword, "city": city,
-        "citylimit": "true", "types": "床和早餐|旅馆|酒店", "offset": 10, "output": "json",
+        "citylimit": "true", "types": "050000", "offset": 10, "output": "json",
     }).json()
     pois = []
     for p in r.get("pois", []):
