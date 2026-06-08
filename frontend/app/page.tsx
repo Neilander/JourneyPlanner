@@ -64,6 +64,8 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Hotel[]>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [editingCity, setEditingCity] = useState(false)
+  const [cityInput, setCityInput] = useState('')
 
   // 从URL ?uid= 加载Bot收录的酒店和城市
   useEffect(() => {
@@ -209,11 +211,39 @@ export default function Home() {
 
   const selectedAttractions = attractions.filter(a => selected.has(a.id))
 
+  const switchCity = async (city: string) => {
+    if (!city.trim()) return
+    setCityName(city)
+    setSelected(new Set())
+    setEditingCity(false)
+    try {
+      const info = await fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(city)}`).then(r => r.json())
+      if (info.center) setMapCenter([info.center.lng, info.center.lat])
+      if (info.attractions?.length > 0) setAttractions(info.attractions)
+    } catch {}
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-800 text-white">
-        <span className="font-bold text-lg">{cityName}</span>
+        {editingCity ? (
+          <input
+            autoFocus
+            className="font-bold text-lg bg-gray-700 text-white rounded px-2 py-0.5 w-24 outline-none"
+            value={cityInput}
+            onChange={e => setCityInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') switchCity(cityInput); if (e.key === 'Escape') setEditingCity(false) }}
+            onBlur={() => { if (cityInput.trim()) switchCity(cityInput); else setEditingCity(false) }}
+          />
+        ) : (
+          <button
+            onClick={() => { setCityInput(cityName); setEditingCity(true) }}
+            className="font-bold text-lg flex items-center gap-1 hover:text-orange-400 transition-colors"
+          >
+            {cityName} <span className="text-xs text-gray-400">✎</span>
+          </button>
+        )}
         <div className="flex items-center gap-2">
           <div className="flex bg-gray-700 rounded-full p-0.5 text-sm">
             <button
