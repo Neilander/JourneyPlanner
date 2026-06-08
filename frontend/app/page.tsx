@@ -9,7 +9,7 @@ const API_BASE = 'https://api.neiland.xyz'
 
 const XIAN_CENTER: [number, number] = [108.9398, 34.3416]
 
-const ATTRACTIONS = [
+const XIAN_ATTRACTIONS = [
   { id: '1', name: '大唐不夜城', lng: 108.9605, lat: 34.2227 },
   { id: '2', name: '钟楼',       lng: 108.9408, lat: 34.2582 },
   { id: '3', name: '兵马俑',     lng: 109.2785, lat: 34.3843 },
@@ -17,6 +17,13 @@ const ATTRACTIONS = [
   { id: '5', name: '陕西历史博物馆', lng: 108.9417, lat: 34.2318 },
   { id: '6', name: '回民街',     lng: 108.9340, lat: 34.2660 },
 ]
+
+interface Attraction {
+  id: string
+  name: string
+  lng: number
+  lat: number
+}
 
 interface Hotel {
   id: string
@@ -50,22 +57,34 @@ export default function Home() {
   const [tab, setTab] = useState<'map' | 'rank'>('map')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [hotels, setHotels] = useState<Hotel[]>([])
+  const [attractions, setAttractions] = useState<Attraction[]>(XIAN_ATTRACTIONS)
+  const [cityName, setCityName] = useState('西安')
+  const [mapCenter, setMapCenter] = useState<[number, number]>(XIAN_CENTER)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchResults, setSearchResults] = useState<Hotel[]>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
 
-  // 从URL ?uid= 加载Bot收录的酒店
+  // 从URL ?uid= 加载Bot收录的酒店和城市
   useEffect(() => {
     const uid = new URLSearchParams(window.location.search).get('uid')
     if (!uid) return
     fetch(`${API_BASE}/api/user/hotels?wecom_id=${encodeURIComponent(uid)}`)
       .then(r => r.json())
-      .then(data => {
+      .then(async data => {
         const loaded: Hotel[] = (data.hotels || [])
           .filter((h: any) => h.lat && h.lng)
           .map((h: any) => ({ id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat }))
         if (loaded.length > 0) setHotels(loaded)
+
+        // 加载城市景点和中心
+        const city = data.city || '西安'
+        if (city !== '西安') {
+          setCityName(city)
+          const info = await fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(city)}`).then(r => r.json())
+          if (info.center) setMapCenter([info.center.lng, info.center.lat])
+          if (info.attractions?.length > 0) setAttractions(info.attractions)
+        }
       })
       .catch(() => {})
   }, [])
@@ -80,13 +99,13 @@ export default function Home() {
         if (cancelled) return
         AMapRef.current = AMap
         const map = new AMap.Map(containerRef.current, {
-          center: XIAN_CENTER,
+          center: mapCenter,
           zoom: 13,
           mapStyle: 'amap://styles/whitesmoke',
         })
         mapRef.current = map
 
-        ATTRACTIONS.forEach(a => {
+        attractions.forEach(a => {
           const marker = new AMap.Marker({
             position: [a.lng, a.lat],
             title: a.name,
@@ -97,7 +116,7 @@ export default function Home() {
       })
     })()
     return () => { cancelled = true; mapRef.current?.destroy() }
-  }, [])
+  }, [mapCenter, attractions])
 
   // Bot加载的酒店上图（等地图ready）
   useEffect(() => {
@@ -178,7 +197,7 @@ export default function Home() {
   // Compute ranking based on selected attractions
   const ranking = useMemo(() => {
     if (hotels.length === 0 || selected.size === 0) return []
-    const targets = ATTRACTIONS.filter(a => selected.has(a.id))
+    const targets = attractions.filter(a => selected.has(a.id))
     return hotels
       .map(h => {
         const times = targets.map(a => toMinutes(distanceKm(h.lat, h.lng, a.lat, a.lng)))
@@ -188,13 +207,13 @@ export default function Home() {
       .sort((a, b) => a.avg - b.avg)
   }, [hotels, selected])
 
-  const selectedAttractions = ATTRACTIONS.filter(a => selected.has(a.id))
+  const selectedAttractions = attractions.filter(a => selected.has(a.id))
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-800 text-white">
-        <span className="font-bold text-lg">西安</span>
+        <span className="font-bold text-lg">{cityName}</span>
         <div className="flex items-center gap-2">
           <div className="flex bg-gray-700 rounded-full p-0.5 text-sm">
             <button
@@ -307,7 +326,7 @@ export default function Home() {
           {hotels.length > 0 ? `已导入 ${hotels.length} 家酒店 · ` : ''}选择景点查看通勤
         </p>
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {ATTRACTIONS.map(a => (
+          {attractions.map(a => (
             <button
               key={a.id}
               onClick={() => toggleSelect(a.id)}

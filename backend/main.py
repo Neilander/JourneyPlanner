@@ -93,6 +93,11 @@ def set_bot_state(wecom_id: str, state: int):
         conn.execute("UPDATE users SET bot_state=? WHERE wecom_id=?", (state, wecom_id))
         conn.commit()
 
+def set_user_city(wecom_id: str, city: str):
+    with get_db() as conn:
+        conn.execute("UPDATE users SET city=? WHERE wecom_id=?", (city, wecom_id))
+        conn.commit()
+
 def save_hotel(user_id: int, name: str, source_url: str = "", hotel_id: str = "",
                lat: float = None, lng: float = None, rating: str = "", raw_text: str = ""):
     with get_db() as conn:
@@ -257,6 +262,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
                 rating=ctrip["rating"],
                 raw_text=text[:500]
             )
+            set_user_city(user_id, ctrip["city"])
             hotel_count += 1
             loc_str = f"📍 已定位到地图" if lat else "（坐标定位失败，后续补）"
             send_text(open_kfid, user_id,
@@ -418,4 +424,42 @@ async def poi_search(keyword: str, city: str = "西安"):
 @app.get("/api/user/hotels")
 async def user_hotels(wecom_id: str):
     user = get_or_create_user(wecom_id)
-    return {"hotels": get_hotels(user["id"])}
+    return {"hotels": get_hotels(user["id"]), "city": user["city"]}
+
+@app.get("/api/city/info")
+async def city_info(city: str):
+    # 城市中心坐标
+    center = {"lat": 34.3416, "lng": 108.9398}  # fallback西安
+    try:
+        r = requests.get("https://restapi.amap.com/v3/geocode/geo", params={
+            "key": AMAP_WEB_KEY, "address": city, "output": "json"
+        }, timeout=5).json()
+        geocodes = r.get("geocodes", [])
+        if geocodes:
+            lng, lat = geocodes[0]["location"].split(",")
+            center = {"lat": float(lat), "lng": float(lng)}
+    except Exception as e:
+        print("city center error:", e)
+
+    # 主要景点（旅游景点类型：110200|110100|110000）
+    attractions = []
+    try:
+        r = requests.get("https://restapi.amap.com/v3/place/text", params={
+            "key": AMAP_WEB_KEY, "keywords": city + "景点",
+            "city": city, "citylimit": "true",
+            "types": "110000", "offset": 10, "output": "json",
+        }, timeout=5).json()
+        for i, p in enumerate(r.get("pois", [])):
+            if not p.get("location"):
+                continue
+            lng, lat = p["location"].split(",")
+            attractions.append({
+                "id": str(i + 1),
+                "name": p["name"],
+                "lng": float(lng),
+                "lat": float(lat),
+            })
+    except Exception as e:
+        print("attractions error:", e)
+
+    return {"city": city, "center": center, "attractions": attractions}
