@@ -218,13 +218,86 @@ def parse_hotel_text(text: str) -> dict | None:
             print(f"parse_hotel_text error (attempt {attempt+1}):", e)
     return None
 
+MINIPROGRAM_PROMPT = """从酒店小程序的标题和页面路径中提取酒店信息，以JSON格式返回：
+{"name": "酒店全名", "city": "城市名（只要城市，不要省份）", "rating": "评分数字或空字符串"}
+页面路径(pagepath)中可能包含 city/cityId/cityName/hotelName 等参数，请尽量利用。
+城市ID常见映射：1=北京, 2=上海, 3=广州, 4=深圳, 5=成都, 6=杭州, 7=西安, 15=南京。
+如果无法识别，返回 null。只返回JSON，不要其他内容。"""
+
+# 已知小程序 appid → 平台名
+MINIPROGRAM_APPIDS = {
+    "wx1e26394c80c8d22f": "携程",
+    "wx6afdd3f3b2c97cb3": "携程",
+    "wxb5b36a1c26a74b0c": "去哪儿",
+    "wx04a2dc5ae23c8b81": "美团",
+    "wx1eeff9b4be0da58a": "飞猪",
+    "wx8148f685bc9b1e97": "同程",
+    "wx4868444bf58aad45": "同程",
+    "wx18e2e1e7e52be9e2": "大众点评",
+}
+
+def parse_miniprogram(mp: dict) -> dict | None:
+    """解析微信小程序卡片，提取酒店信息"""
+    if not mp:
+        return None
+    title    = mp.get("title", "")
+    pagepath = mp.get("pagepath", "")
+    appid    = mp.get("appid", "")
+    platform = MINIPROGRAM_APPIDS.get(appid) or detect_platform(title + " " + pagepath)
+
+    # 尝试从 pagepath 提取酒店ID
+    hotel_id = ""
+    for param in ["hotelId", "hotelid", "hotel_id", "id", "masterId"]:
+        m = re.search(rf'[?&]{param}=(\d+)', pagepath, re.I)
+        if m:
+            hotel_id = m.group(1)
+            break
+
+    if not title and not pagepath:
+        return None
+
+    if not DEEPSEEK_KEY:
+        # 无 key：仅靠 title 做酒店名，城市未知
+        if "酒店" in title or "民宿" in title or "宾馆" in title:
+            return {"name": title, "city": "", "rating": "", "url": "", "hotel_id": hotel_id, "platform": platform}
+        return None
+
+    prompt_text = f"标题：{title}\n页面路径：{pagepath}"
+    for attempt in range(2):
+        try:
+            r = requests.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+                json={"model": "deepseek-chat", "max_tokens": 100,
+                      "messages": [{"role": "system", "content": MINIPROGRAM_PROMPT},
+                                    {"role": "user", "content": prompt_text}]},
+                timeout=12
+            ).json()
+            content = r["choices"][0]["message"]["content"].strip()
+            content = re.sub(r'^```[a-z]*\n?|\n?```$', '', content).strip()
+            result = json.loads(content)
+            if not result or not result.get("name"):
+                return None
+            return {
+                "name":     result["name"],
+                "city":     result.get("city", ""),
+                "rating":   str(result.get("rating", "")),
+                "url":      "",
+                "hotel_id": hotel_id,
+                "platform": platform,
+            }
+        except Exception as e:
+            print(f"parse_miniprogram error (attempt {attempt+1}):", e)
+    return None
+
 def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None]:
     """用高德POI搜索拿经纬度"""
     try:
-        r = requests.get("https://restapi.amap.com/v3/place/text", params={
-            "key": AMAP_WEB_KEY, "keywords": name, "city": city,
-            "citylimit": "true", "offset": 1, "output": "json",
-        }, timeout=5).json()
+        params = {"key": AMAP_WEB_KEY, "keywords": name, "offset": 1, "output": "json"}
+        if city:
+            params["city"] = city
+            params["citylimit"] = "true"
+        r = requests.get("https://restapi.amap.com/v3/place/text", params=params, timeout=5).json()
         pois = [p for p in r.get("pois", []) if str(p.get("typecode","")).startswith("100")]
         if not pois:
             pois = r.get("pois", [])  # fallback：没有住宿类就用第一个结果
@@ -331,7 +404,7 @@ def deepseek_chat(user_msg: str) -> str:
 
 # ── Bot 状态机 ────────────────────────────────────────────────────────────────
 
-def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
+def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str, miniprogram: dict = None):
     user = get_or_create_user(user_id)
     bot_state = user["bot_state"]
     hotel_count = get_hotel_count(user["id"])
@@ -352,7 +425,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
     # ── 状态2：闲聊（中枢）──────────────────────────────────────────────────
     # 分支A：导入意图
     if intent == "import":
-        ctrip = parse_hotel_text(text)
+        ctrip = parse_miniprogram(miniprogram) if miniprogram else parse_hotel_text(text)
         if ctrip:
             # 同一hotelId不重复入库
             if ctrip["hotel_id"]:
@@ -369,7 +442,8 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
             clean = re.split(r'[｜|（(]', ctrip["name"])[0].strip()
             clean = re.sub(r'[·•\s]+', ' ', clean).strip()
             search_name = clean[:15] if len(clean) > 15 else clean
-            lat, lng = amap_geocode(search_name, ctrip["city"])
+            city_for_geocode = ctrip["city"] or ""
+            lat, lng = amap_geocode(search_name, city_for_geocode)
             save_hotel(
                 user_id=user["id"],
                 name=ctrip["name"],
@@ -530,13 +604,14 @@ def process_messages(sync_token: str, open_kf_id: str):
             print("=== msg:", msgtype, json.dumps(m, ensure_ascii=False))
             if msgtype == "text":
                 text = m.get("text", {}).get("content", "")
+                handle_user_message(open_kf_id, user_id, text, msgtype)
             elif msgtype == "miniprogram":
-                text = json.dumps(m.get("miniprogram", {}), ensure_ascii=False)
+                mp = m.get("miniprogram", {})
+                handle_user_message(open_kf_id, user_id, "", msgtype, miniprogram=mp)
             elif msgtype == "image":
-                text = ""
+                handle_user_message(open_kf_id, user_id, "", msgtype)
             else:
                 continue
-            handle_user_message(open_kf_id, user_id, text, msgtype)
 
 @app.get("/wecom/callback")
 async def verify(msg_signature: str, timestamp: str, nonce: str, echostr: str):
