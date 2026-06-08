@@ -147,7 +147,9 @@ def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None
             "key": AMAP_WEB_KEY, "keywords": name, "city": city,
             "citylimit": "true", "offset": 1, "output": "json",
         }, timeout=5).json()
-        pois = r.get("pois", [])
+        pois = [p for p in r.get("pois", []) if str(p.get("typecode","")).startswith("100")]
+        if not pois:
+            pois = r.get("pois", [])  # fallback：没有住宿类就用第一个结果
         if pois:
             lng, lat = pois[0]["location"].split(",")
             return float(lat), float(lng)
@@ -406,7 +408,7 @@ async def poi_search(keyword: str, city: str = "西安"):
     }).json()
     pois = []
     for p in r.get("pois", []):
-        if not str(p.get("typecode", "")).startswith("050"):
+        if not str(p.get("typecode", "")).startswith("100"):
             continue
         lng, lat = p["location"].split(",")
         pois.append({"id": p["id"], "name": p["name"],
