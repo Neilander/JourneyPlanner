@@ -55,6 +55,22 @@ export default function Home() {
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
 
+  // 从URL ?uid= 加载Bot收录的酒店
+  useEffect(() => {
+    const uid = new URLSearchParams(window.location.search).get('uid')
+    if (!uid) return
+    fetch(`${API_BASE}/api/user/hotels?wecom_id=${encodeURIComponent(uid)}`)
+      .then(r => r.json())
+      .then(data => {
+        const loaded: Hotel[] = (data.hotels || [])
+          .filter((h: any) => h.lat && h.lng)
+          .map((h: any) => ({ id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat }))
+        if (loaded.length > 0) setHotels(loaded)
+      })
+      .catch(() => {})
+  }, [])
+
+  // 地图初始化
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -82,6 +98,35 @@ export default function Home() {
     })()
     return () => { cancelled = true; mapRef.current?.destroy() }
   }, [])
+
+  // Bot加载的酒店上图（等地图ready）
+  useEffect(() => {
+    if (hotels.length === 0) return
+    const tryRender = (retry = 0) => {
+      const AMap = AMapRef.current
+      const map = mapRef.current
+      if (!AMap || !map) {
+        if (retry < 20) setTimeout(() => tryRender(retry + 1), 300)
+        return
+      }
+      hotelMarkersRef.current.forEach(m => m.setMap(null))
+      hotelMarkersRef.current = []
+      hotels.forEach(hotel => {
+        const marker = new AMap.Marker({
+          position: [hotel.lng, hotel.lat],
+          title: hotel.name,
+          content: `<div style="display:flex;flex-direction:column;align-items:center">
+            <div style="background:#f97316;color:white;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25)">${hotel.name}</div>
+            <div style="width:10px;height:10px;background:#f97316;border-radius:50%;margin-top:3px;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></div>
+          </div>`,
+          offset: new AMap.Pixel(-40, -28),
+        })
+        marker.setMap(map)
+        hotelMarkersRef.current.push(marker)
+      })
+    }
+    tryRender()
+  }, [hotels])
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {

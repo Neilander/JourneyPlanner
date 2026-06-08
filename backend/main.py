@@ -223,8 +223,10 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
     if intent == "import":
         ctrip = parse_ctrip_text(text)
         if ctrip:
-            # 酒店名太长时截短再搜，提高高德命中率
-            search_name = ctrip["name"][:12] if len(ctrip["name"]) > 12 else ctrip["name"]
+            # 剥掉括号/特殊符号后取前段，提高高德命中率
+            clean = re.split(r'[｜|（(]', ctrip["name"])[0].strip()
+            clean = re.sub(r'[·•\s]+', ' ', clean).strip()
+            search_name = clean[:15] if len(clean) > 15 else clean
             lat, lng = amap_geocode(search_name, ctrip["city"])
             save_hotel(
                 user_id=user["id"],
@@ -265,9 +267,10 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
                 "还没有候选酒店呢～\n\n"
                 "先把想考虑的酒店链接或携程分享文本发给我，我帮你存好，再来看对比结果！")
         else:
+            h5_with_uid = f"{H5_URL}?uid={user_id}"
             send_text(open_kfid, user_id,
                 f"已收录 {hotel_count} 家候选酒店 🏨\n\n"
-                f"点击下方链接，在地图上看各酒店到景点的通勤距离 👇\n{H5_URL}\n\n"
+                f"点击下方链接，在地图上看各酒店到景点的通勤距离 👇\n{h5_with_uid}\n\n"
                 "选好景点后会自动按距离排名～")
         return
 
