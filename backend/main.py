@@ -335,18 +335,18 @@ def process_messages(sync_token: str, open_kf_id: str):
                 continue
             msgtype = m.get("msgtype", "")
             user_id = m.get("external_userid", "")
-        if not user_id:
-            continue
-        print("=== msg:", msgtype, json.dumps(m, ensure_ascii=False))
-        if msgtype == "text":
-            text = m.get("text", {}).get("content", "")
-        elif msgtype == "miniprogram":
-            text = json.dumps(m.get("miniprogram", {}), ensure_ascii=False)
-        elif msgtype == "image":
-            text = ""
-        else:
-            continue
-        handle_user_message(open_kf_id, user_id, text, msgtype)
+            if not user_id:
+                continue
+            print("=== msg:", msgtype, json.dumps(m, ensure_ascii=False))
+            if msgtype == "text":
+                text = m.get("text", {}).get("content", "")
+            elif msgtype == "miniprogram":
+                text = json.dumps(m.get("miniprogram", {}), ensure_ascii=False)
+            elif msgtype == "image":
+                text = ""
+            else:
+                continue
+            handle_user_message(open_kf_id, user_id, text, msgtype)
 
 @app.get("/wecom/callback")
 async def verify(msg_signature: str, timestamp: str, nonce: str, echostr: str):
