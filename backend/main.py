@@ -164,10 +164,12 @@ def detect_platform(text: str) -> str:
 
 def parse_hotel_text(text: str) -> dict | None:
     """通用多平台酒店分享文本解析，支持携程/去哪儿/飞猪/美团/同程/大众点评等"""
-    # 先用规则快速判断是否包含酒店关键词
+    # 先用规则快速判断：含酒店关键词 OR 含已知平台短链
     hotel_signals = ["酒店", "民宿", "宾馆", "旅馆", "客栈", "hotelid", "hotel",
                      "分享酒店", "发现了", "入住", "住宿"]
-    if not any(s in text.lower() for s in hotel_signals):
+    has_hotel_signal = any(s in text.lower() for s in hotel_signals)
+    has_hotel_url = re.search(r'https?://', text) and any(d in text for d in HOTEL_DOMAINS)
+    if not has_hotel_signal and not has_hotel_url:
         return None
 
     url     = URL_RE.search(text)
@@ -186,32 +188,35 @@ def parse_hotel_text(text: str) -> dict | None:
                 "url": url.group(0) if url else "",
                 "hotel_id": hotel_id.group(1) if hotel_id else "",
                 "platform": detect_platform(text)}
-    try:
-        r = requests.post(
-            "https://api.deepseek.com/chat/completions",
-            headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
-            json={"model": "deepseek-chat", "max_tokens": 100,
-                  "messages": [{"role": "system", "content": EXTRACT_PROMPT},
-                                {"role": "user", "content": text[:500]}]},
-            timeout=10
-        ).json()
-        content = r["choices"][0]["message"]["content"].strip()
-        # 清理可能的markdown代码块
-        content = re.sub(r'^```[a-z]*\n?|\n?```$', '', content).strip()
-        result = json.loads(content)
-        if not result or not result.get("name") or not result.get("city"):
-            return None
-        return {
-            "name":     result["name"],
-            "city":     result["city"],
-            "rating":   str(result.get("rating", "")),
-            "url":      url.group(0) if url else "",
-            "hotel_id": hotel_id.group(1) if hotel_id else "",
-            "platform": detect_platform(text),
-        }
-    except Exception as e:
-        print("parse_hotel_text error:", e)
-        return None
+    last_err = None
+    for attempt in range(2):   # 最多重试一次
+        try:
+            r = requests.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+                json={"model": "deepseek-chat", "max_tokens": 100,
+                      "messages": [{"role": "system", "content": EXTRACT_PROMPT},
+                                    {"role": "user", "content": text[:500]}]},
+                timeout=12
+            ).json()
+            content = r["choices"][0]["message"]["content"].strip()
+            # 清理可能的markdown代码块
+            content = re.sub(r'^```[a-z]*\n?|\n?```$', '', content).strip()
+            result = json.loads(content)
+            if not result or not result.get("name") or not result.get("city"):
+                return None
+            return {
+                "name":     result["name"],
+                "city":     result["city"],
+                "rating":   str(result.get("rating", "")),
+                "url":      url.group(0) if url else "",
+                "hotel_id": hotel_id.group(1) if hotel_id else "",
+                "platform": detect_platform(text),
+            }
+        except Exception as e:
+            last_err = e
+            print(f"parse_hotel_text error (attempt {attempt+1}):", e)
+    return None
 
 def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None]:
     """用高德POI搜索拿经纬度"""
@@ -236,7 +241,13 @@ DONE_KEYWORDS  = ["好了", "看结果", "没了", "完了", "结果", "看看",
 CLEAR_KEYWORDS = ["清空", "重置", "清除", "重来", "重新开始"]
 DONE_KEYWORDS_SET = set(DONE_KEYWORDS)
 HOTEL_DOMAINS = ["ctrip", "qunar", "meituan", "fliggy", "alitrip", "ly.com",
-                 "dianping", "tongcheng", "hotel"]
+                 "dianping", "tongcheng", "hotel",
+                 "dpurl.cn",    # 大众点评/美团短链
+                 "mt.cn",       # 美团短链
+                 "u.meituan",   # 美团短链
+                 "dwz.cn",      # 通用短链（同程等）
+                 "suo.im",
+                 ]
 
 INTENT_SYSTEM = """你是意图分类器。判断用户消息属于哪种意图，只返回JSON，不要其他文字。
 
@@ -383,10 +394,11 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
                 f"继续发酒店，或发「看结果」打开对比页面")
         else:
             send_text(open_kfid, user_id,
-                "收到！不过我没识别出携程格式。\n\n"
-                "请发**携程分享文本**（在携程 App 里点分享→复制文字），格式像这样：\n"
-                "「#携程旅行# <城市><酒店名> X.X分...」\n\n"
-                "或者直接把链接粘过来也行～")
+                "收到！不过我没能识别出酒店信息 🤔\n\n"
+                "试试这几种方式：\n"
+                "① 在携程/美团/去哪儿 App 里点「分享」→「复制文字」，把文字发过来\n"
+                "② 直接粘贴酒店页面链接\n\n"
+                "如果刚才发的是短链接，重新发一遍通常可以解决～")
         return
 
     # 分支A-hint：提到导入但没有可解析的数据
@@ -429,7 +441,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
         if hotel_count == 0:
             send_text(open_kfid, user_id,
                 "还没有候选酒店呢～\n\n"
-                "先把想考虑的酒店链接或携程分享文本发给我，我帮你存好，再来看对比结果！")
+                "先把想考虑的酒店链接或分享文本发给我，我帮你存好，再来看对比结果！")
         else:
             h5_with_uid = f"{H5_URL}?uid={user_id}"
             send_text(open_kfid, user_id,
@@ -444,7 +456,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
             conn.execute("DELETE FROM hotels WHERE user_id=?", (user["id"],))
             conn.commit()
         send_text(open_kfid, user_id,
-            "✅ 已清空候选酒店列表\n\n重新发酒店链接或携程分享文本，开始新一轮规划～")
+            "✅ 已清空候选酒店列表\n\n重新发酒店链接或分享文本，开始新一轮规划～")
         return
 
     # 分支C：普通闲聊
