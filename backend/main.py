@@ -223,7 +223,9 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
     if intent == "import":
         ctrip = parse_ctrip_text(text)
         if ctrip:
-            lat, lng = amap_geocode(ctrip["name"], ctrip["city"])
+            # 酒店名太长时截短再搜，提高高德命中率
+            search_name = ctrip["name"][:12] if len(ctrip["name"]) > 12 else ctrip["name"]
+            lat, lng = amap_geocode(search_name, ctrip["city"])
             save_hotel(
                 user_id=user["id"],
                 name=ctrip["name"],
