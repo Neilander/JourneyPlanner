@@ -64,7 +64,7 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Hotel[]>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
-  const [editingCity, setEditingCity] = useState(false)
+  const [showCityPicker, setShowCityPicker] = useState(false)
   const [cityInput, setCityInput] = useState('')
 
   // 从URL ?uid= 加载Bot收录的酒店和城市
@@ -211,11 +211,22 @@ export default function Home() {
 
   const selectedAttractions = attractions.filter(a => selected.has(a.id))
 
+  const CITIES = [
+    '北京','上海','广州','深圳','成都','杭州','西安','重庆','南京','武汉',
+    '苏州','天津','长沙','青岛','厦门','大理','丽江','三亚','桂林','乌鲁木齐',
+    '拉萨','昆明','贵阳','哈尔滨','沈阳','济南','郑州','合肥','福州','南昌',
+  ]
+
+  const filteredCities = cityInput
+    ? CITIES.filter(c => c.includes(cityInput))
+    : CITIES
+
   const switchCity = async (city: string) => {
     if (!city.trim()) return
     setCityName(city)
     setSelected(new Set())
-    setEditingCity(false)
+    setShowCityPicker(false)
+    setCityInput('')
     try {
       const info = await fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(city)}`).then(r => r.json())
       if (info.center) setMapCenter([info.center.lng, info.center.lat])
@@ -225,25 +236,52 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
+      {/* City picker modal */}
+      {showCityPicker && (
+        <div className="absolute inset-0 bg-black/60 z-50 flex flex-col">
+          <div className="bg-white m-4 mt-16 rounded-xl overflow-hidden flex flex-col max-h-[70vh]">
+            <div className="flex items-center gap-2 p-3 border-b">
+              <input
+                autoFocus
+                className="flex-1 text-sm outline-none"
+                placeholder="搜索城市，如：成都"
+                value={cityInput}
+                onChange={e => setCityInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && cityInput.trim()) switchCity(cityInput) }}
+              />
+              <button onClick={() => setShowCityPicker(false)} className="text-gray-400 text-sm">取消</button>
+            </div>
+            <div className="overflow-y-auto">
+              <div className="flex flex-wrap gap-2 p-3">
+                {filteredCities.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => switchCity(c)}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${c === cityName ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-700 hover:border-orange-400'}`}
+                  >{c}</button>
+                ))}
+                {filteredCities.length === 0 && cityInput && (
+                  <button
+                    onClick={() => switchCity(cityInput)}
+                    className="px-3 py-1.5 rounded-full text-sm bg-orange-500 text-white"
+                  >搜索「{cityInput}」</button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-800 text-white">
-        {editingCity ? (
-          <input
-            autoFocus
-            className="font-bold text-lg bg-gray-700 text-white rounded px-2 py-0.5 w-24 outline-none"
-            value={cityInput}
-            onChange={e => setCityInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') switchCity(cityInput); if (e.key === 'Escape') setEditingCity(false) }}
-            onBlur={() => { if (cityInput.trim()) switchCity(cityInput); else setEditingCity(false) }}
-          />
-        ) : (
-          <button
-            onClick={() => { setCityInput(cityName); setEditingCity(true) }}
-            className="font-bold text-lg flex items-center gap-1 hover:text-orange-400 transition-colors"
-          >
-            {cityName} <span className="text-xs text-gray-400">✎</span>
-          </button>
-        )}
+        <button
+          onClick={() => setShowCityPicker(true)}
+          className="flex items-center gap-1.5 bg-gray-700 hover:bg-orange-500 transition-colors px-3 py-1.5 rounded-full"
+        >
+          <span className="text-sm">📍</span>
+          <span className="font-bold text-sm">{cityName}</span>
+          <span className="text-gray-400 text-xs">切换 ▾</span>
+        </button>
         <div className="flex items-center gap-2">
           <div className="flex bg-gray-700 rounded-full p-0.5 text-sm">
             <button
