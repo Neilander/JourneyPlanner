@@ -158,20 +158,23 @@ def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None
 # ── 意图识别 ──────────────────────────────────────────────────────────────────
 
 DONE_KEYWORDS  = ["好了", "看结果", "没了", "完了", "结果", "看看", "对比", "比较"]
+CLEAR_KEYWORDS = ["清空", "重置", "删除", "清除", "重来", "重新开始"]
 HOTEL_KEYWORDS = ["酒店", "民宿", "旅馆", "客栈", "住", "房间", "携程", "去哪儿", "美团"]
 
 def classify_intent(text: str, msgtype: str) -> str:
-    """返回 intent: onboarding | import | done | chitchat"""
+    """返回 intent: onboarding | import | done | clear | chitchat"""
     if msgtype in ("image", "miniprogram"):
         return "import"
     if parse_ctrip_text(text):
         return "import"
     if re.search(r'https?://', text) and any(k in text for k in ["ctrip", "trip", "hotel", "酒店", "qunar", "meituan"]):
         return "import"
+    if any(k in text for k in CLEAR_KEYWORDS):
+        return "clear"
     if any(k in text for k in DONE_KEYWORDS):
         return "done"
     if any(k in text for k in HOTEL_KEYWORDS):
-        return "import_hint"  # 提到酒店但没发链接
+        return "import_hint"
     return "chitchat"
 
 # ── DeepSeek 闲聊 ─────────────────────────────────────────────────────────────
@@ -179,6 +182,10 @@ def classify_intent(text: str, msgtype: str) -> str:
 PERSONA_PROMPT = """你是「旅途向导」，一个专注西安旅行规划的AI助手，风格：亲切、风趣、简洁。
 你帮用户规划西安行程——找酒店、看景点、统筹通勤距离。
 如果用户问旅行相关问题就认真回答；如果用户闲聊就顺着说几句然后引导回旅行话题。
+重要约束：
+- 你没有执行操作的能力，不能清空列表、删除数据、查询订单等，不要谎称已执行。
+- 如果用户要清空/删除，告诉他发「清空列表」即可由系统处理。
+- 只回答你确实知道的事，不要编造酒店信息或景点数据。
 回复控制在100字以内，不用加emoji堆砌。"""
 
 def deepseek_chat(user_msg: str) -> str:
@@ -283,6 +290,15 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
                 f"已收录 {hotel_count} 家候选酒店 🏨\n\n"
                 f"点击下方链接，在地图上看各酒店到景点的通勤距离 👇\n{h5_with_uid}\n\n"
                 "选好景点后会自动按距离排名～")
+        return
+
+    # 分支：清空列表
+    if intent == "clear":
+        with get_db() as conn:
+            conn.execute("DELETE FROM hotels WHERE user_id=?", (user["id"],))
+            conn.commit()
+        send_text(open_kfid, user_id,
+            "✅ 已清空候选酒店列表\n\n重新发酒店链接或携程分享文本，开始新一轮规划～")
         return
 
     # 分支C：普通闲聊
@@ -390,6 +406,8 @@ async def poi_search(keyword: str, city: str = "西安"):
     }).json()
     pois = []
     for p in r.get("pois", []):
+        if not str(p.get("typecode", "")).startswith("050"):
+            continue
         lng, lat = p["location"].split(",")
         pois.append({"id": p["id"], "name": p["name"],
                      "address": p.get("address", ""), "lng": float(lng), "lat": float(lat)})
