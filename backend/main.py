@@ -290,6 +290,69 @@ def parse_miniprogram(mp: dict) -> dict | None:
             print(f"parse_miniprogram error (attempt {attempt+1}):", e)
     return None
 
+IMAGE_EXTRACT_PROMPT = """这是一张酒店 App 截图，请从中提取酒店信息，以JSON格式返回：
+{"name": "酒店全名", "city": "城市名（只要城市，不要省份）", "rating": "评分数字或空字符串"}
+如果图中没有明确的酒店信息，返回 null。只返回JSON，不要其他内容。"""
+
+def download_media(media_id: str, token: str) -> bytes | None:
+    """从微信KF接口下载图片"""
+    try:
+        r = requests.get(
+            "https://qyapi.weixin.qq.com/cgi-bin/media/get",
+            params={"access_token": token, "media_id": media_id},
+            timeout=10
+        )
+        if r.status_code == 200 and r.headers.get("Content-Type", "").startswith("image"):
+            return r.content
+    except Exception as e:
+        print("download_media error:", e)
+    return None
+
+def parse_hotel_image(image_bytes: bytes) -> dict | None:
+    """用 DeepSeek Vision 从截图提取酒店信息"""
+    if not DEEPSEEK_KEY or not image_bytes:
+        return None
+    import base64
+    b64 = base64.b64encode(image_bytes).decode()
+    # 检测图片格式
+    mime = "image/jpeg"
+    if image_bytes[:4] == b'\x89PNG':
+        mime = "image/png"
+    for attempt in range(2):
+        try:
+            r = requests.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "deepseek-chat",
+                    "max_tokens": 150,
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                            {"type": "text", "text": IMAGE_EXTRACT_PROMPT}
+                        ]
+                    }]
+                },
+                timeout=20
+            ).json()
+            content = r["choices"][0]["message"]["content"].strip()
+            content = re.sub(r'^```[a-z]*\n?|\n?```$', '', content).strip()
+            result = json.loads(content)
+            if not result or not result.get("name") or not result.get("city"):
+                return None
+            return {
+                "name":     result["name"],
+                "city":     result.get("city", ""),
+                "rating":   str(result.get("rating", "")),
+                "url":      "",
+                "hotel_id": "",
+                "platform": "截图",
+            }
+        except Exception as e:
+            print(f"parse_hotel_image error (attempt {attempt+1}):", e)
+    return None
+
 def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None]:
     """用高德POI搜索拿经纬度"""
     try:
@@ -404,7 +467,8 @@ def deepseek_chat(user_msg: str) -> str:
 
 # ── Bot 状态机 ────────────────────────────────────────────────────────────────
 
-def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str, miniprogram: dict = None):
+def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
+                        miniprogram: dict = None, image_bytes: bytes = None):
     user = get_or_create_user(user_id)
     bot_state = user["bot_state"]
     hotel_count = get_hotel_count(user["id"])
@@ -427,6 +491,13 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str, m
     if intent == "import":
         if miniprogram:
             ctrip = parse_miniprogram(miniprogram)
+        elif image_bytes:
+            ctrip = parse_hotel_image(image_bytes)
+            if not ctrip:
+                send_text(open_kfid, user_id,
+                    "收到截图，不过我没能从中识别出酒店信息 🤔\n\n"
+                    "截图里需要有酒店名称和城市才能识别，也可以直接复制酒店链接发过来～")
+                return
         elif msgtype == "miniprogram_text":
             # KF把小程序卡片压成文本，标题里通常有酒店名但没有城市
             # 先尝试用 DeepSeek 从标题提取，失败则引导用户换方式
@@ -603,8 +674,9 @@ def process_messages(sync_token: str, open_kf_id: str):
         payload = {"token": sync_token, "open_kfid": open_kf_id, "limit": 1000}
         if cursor:
             payload["cursor"] = cursor
+        token = get_access_token()
         resp = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg",
-                             params={"access_token": get_access_token()}, json=payload).json()
+                             params={"access_token": token}, json=payload).json()
         next_cursor = resp.get("next_cursor")
         if next_cursor:
             kv_set("sync_cursor", next_cursor)
@@ -628,7 +700,9 @@ def process_messages(sync_token: str, open_kf_id: str):
                 mp = m.get("miniprogram", {})
                 handle_user_message(open_kf_id, user_id, "", msgtype, miniprogram=mp)
             elif msgtype == "image":
-                handle_user_message(open_kf_id, user_id, "", msgtype)
+                media_id = m.get("image", {}).get("media_id", "")
+                img_bytes = download_media(media_id, token) if media_id else None
+                handle_user_message(open_kf_id, user_id, "", msgtype, image_bytes=img_bytes)
             else:
                 continue
 
