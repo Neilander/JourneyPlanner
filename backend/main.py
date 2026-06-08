@@ -45,6 +45,7 @@ def init_db():
             lng         REAL,
             rating      TEXT,
             raw_text    TEXT,
+            platform    TEXT DEFAULT '',
             created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
@@ -66,8 +67,11 @@ def migrate_db():
         cols = [r[1] for r in conn.execute("PRAGMA table_info(hotels)").fetchall()]
         if "city" not in cols:
             conn.execute("ALTER TABLE hotels ADD COLUMN city TEXT DEFAULT ''")
-            conn.commit()
             print("DB migration: added city column to hotels")
+        if "platform" not in cols:
+            conn.execute("ALTER TABLE hotels ADD COLUMN platform TEXT DEFAULT ''")
+            print("DB migration: added platform column to hotels")
+        conn.commit()
 
 migrate_db()
 
@@ -111,12 +115,13 @@ def set_user_city(wecom_id: str, city: str):
         conn.commit()
 
 def save_hotel(user_id: int, name: str, source_url: str = "", hotel_id: str = "",
-               lat: float = None, lng: float = None, rating: str = "", raw_text: str = ""):
+               lat: float = None, lng: float = None, rating: str = "", raw_text: str = "",
+               city: str = "", platform: str = ""):
     with get_db() as conn:
         conn.execute("""
-            INSERT INTO hotels (user_id, name, source_url, hotel_id, lat, lng, rating, raw_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, name, source_url, hotel_id, lat, lng, rating, raw_text))
+            INSERT INTO hotels (user_id, name, city, source_url, hotel_id, lat, lng, rating, raw_text, platform)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, name, city, source_url, hotel_id, lat, lng, rating, raw_text, platform))
         conn.commit()
 
 def get_hotel_count(user_id: int) -> int:
@@ -140,6 +145,23 @@ EXTRACT_PROMPT = """从下面的酒店分享文本中提取信息，以JSON格�
 如果无法识别酒店信息，返回 null。
 只返回JSON，不要其他内容。"""
 
+PLATFORM_PATTERNS = [
+    ("携程",   ["ctrip.com", "trip.com", "携程"]),
+    ("去哪儿", ["qunar.com", "去哪儿", "去哪网"]),
+    ("美团",   ["meituan.com", "美团"]),
+    ("飞猪",   ["fliggy.com", "alitrip.com", "飞猪"]),
+    ("同程",   ["tongcheng.com", "ly.com", "同程"]),
+    ("大众点评", ["dianping.com", "大众点评"]),
+    ("小红书", ["xiaohongshu.com", "xhslink.com", "小红书"]),
+]
+
+def detect_platform(text: str) -> str:
+    t = text.lower()
+    for name, signals in PLATFORM_PATTERNS:
+        if any(s.lower() in t for s in signals):
+            return name
+    return "其他"
+
 def parse_hotel_text(text: str) -> dict | None:
     """通用多平台酒店分享文本解析，支持携程/去哪儿/飞猪/美团/同程/大众点评等"""
     # 先用规则快速判断是否包含酒店关键词
@@ -162,7 +184,8 @@ def parse_hotel_text(text: str) -> dict | None:
         return {"city": pair.group(1).strip(), "name": pair.group(2).strip(),
                 "rating": rating.group(1) if rating else "",
                 "url": url.group(0) if url else "",
-                "hotel_id": hotel_id.group(1) if hotel_id else ""}
+                "hotel_id": hotel_id.group(1) if hotel_id else "",
+                "platform": detect_platform(text)}
     try:
         r = requests.post(
             "https://api.deepseek.com/chat/completions",
@@ -184,6 +207,7 @@ def parse_hotel_text(text: str) -> dict | None:
             "rating":   str(result.get("rating", "")),
             "url":      url.group(0) if url else "",
             "hotel_id": hotel_id.group(1) if hotel_id else "",
+            "platform": detect_platform(text),
         }
     except Exception as e:
         print("parse_hotel_text error:", e)
@@ -338,18 +362,22 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
             save_hotel(
                 user_id=user["id"],
                 name=ctrip["name"],
+                city=ctrip["city"],
                 source_url=ctrip["url"],
                 hotel_id=ctrip["hotel_id"],
                 lat=lat, lng=lng,
                 rating=ctrip["rating"],
-                raw_text=text[:500]
+                raw_text=text[:500],
+                platform=ctrip.get("platform", "")
             )
             set_user_city(user_id, ctrip["city"])
             hotel_count += 1
             loc_str = f"📍 已定位到地图" if lat else "（坐标定位失败，后续补）"
+            platform_str = f" [{ctrip.get('platform', '')}]" if ctrip.get('platform') else ""
             send_text(open_kfid, user_id,
                 f"✅ 已记录：{ctrip['name']}"
                 + (f"（{ctrip['rating']}分）" if ctrip["rating"] else "")
+                + platform_str
                 + f"\n{loc_str}\n\n"
                 f"当前候选酒店：{hotel_count} 家\n"
                 f"继续发酒店，或发「看结果」打开对比页面")
@@ -376,8 +404,8 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
             return
         with get_db() as conn:
             rows = conn.execute(
-                "SELECT id, name FROM hotels WHERE user_id=? AND (city LIKE ? OR name LIKE ?)",
-                (user["id"], f"%{delete_target}%", f"%{delete_target}%")
+                "SELECT id, name, platform FROM hotels WHERE user_id=? AND (city LIKE ? OR name LIKE ? OR platform LIKE ?)",
+                (user["id"], f"%{delete_target}%", f"%{delete_target}%", f"%{delete_target}%")
             ).fetchall()
             if not rows:
                 send_text(open_kfid, user_id,
