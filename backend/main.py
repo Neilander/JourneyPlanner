@@ -38,6 +38,7 @@ def init_db():
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id     INTEGER NOT NULL,
             name        TEXT NOT NULL,
+            city        TEXT DEFAULT '',
             source_url  TEXT,
             hotel_id    TEXT,
             lat         REAL,
@@ -58,6 +59,17 @@ def init_db():
         """)
 
 init_db()
+
+# ── 数据库迁移（新增列兼容旧库）────────────────────────────────────────────────
+def migrate_db():
+    with get_db() as conn:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(hotels)").fetchall()]
+        if "city" not in cols:
+            conn.execute("ALTER TABLE hotels ADD COLUMN city TEXT DEFAULT ''")
+            conn.commit()
+            print("DB migration: added city column to hotels")
+
+migrate_db()
 
 def kv_get(key: str) -> str | None:
     with get_db() as conn:
