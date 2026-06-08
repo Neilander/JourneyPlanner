@@ -307,9 +307,6 @@ def process_messages(sync_token: str, open_kf_id: str):
         if msg_id:
             _processed_msg_ids.add(msg_id)
         msgtype = m.get("msgtype", "")
-        # 只处理用户发来的消息（过滤bot自己发的）
-        if m.get("origin") == 3:
-            continue
         user_id = m.get("external_userid", "")
         if not user_id:
             continue
