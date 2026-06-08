@@ -117,33 +117,65 @@ def get_hotels(user_id: int) -> list:
             "SELECT * FROM hotels WHERE user_id=? ORDER BY created_at DESC", (user_id,)
         ).fetchall()]
 
-# ── 携程链接解析 ───────────────────────────────────────────────────────────────
+# ── 多平台酒店解析 ────────────────────────────────────────────────────────────
 
-CTRIP_TEXT_RE = re.compile(
-    r'[<＜]([^<>＜＞]+)[>＞]\s*[<＜]([^<>＜＞]+)[>＞]'  # <城市><酒店名>
-)
-CTRIP_RATING_RE = re.compile(r'([0-9](?:\.[0-9])?)\s*分')
-CTRIP_ID_RE     = re.compile(r'hotelid=(\d+)', re.I)
-CTRIP_URL_RE    = re.compile(r'https?://[^\s]+')
+URL_RE     = re.compile(r'https?://[^\s]+')
+RATING_RE  = re.compile(r'([0-9](?:\.[0-9])?)\s*分')
+HOTEL_ID_RE = re.compile(r'hotelid=(\d+)', re.I)
 
-def parse_ctrip_text(text: str) -> dict | None:
-    """解析携程分享文本，返回 {city, name, hotel_id, rating, url} 或 None"""
-    pair = CTRIP_TEXT_RE.search(text)
-    if not pair:
+EXTRACT_PROMPT = """从下面的酒店分享文本中提取信息，以JSON格式返回：
+{"name": "酒店全名", "city": "城市名（只要城市，不要省份）", "rating": "评分数字或空字符串"}
+如果无法识别酒店信息，返回 null。
+只返回JSON，不要其他内容。"""
+
+def parse_hotel_text(text: str) -> dict | None:
+    """通用多平台酒店分享文本解析，支持携程/去哪儿/飞猪/美团/同程/大众点评等"""
+    # 先用规则快速判断是否包含酒店关键词
+    hotel_signals = ["酒店", "民宿", "宾馆", "旅馆", "客栈", "hotelid", "hotel",
+                     "分享酒店", "发现了", "入住", "住宿"]
+    if not any(s in text.lower() for s in hotel_signals):
         return None
-    city  = pair.group(1).strip()
-    name  = pair.group(2).strip()
-    hid   = (CTRIP_ID_RE.search(text) or [None])[0]
-    hid   = CTRIP_ID_RE.search(text)
-    rating = CTRIP_RATING_RE.search(text)
-    url    = CTRIP_URL_RE.search(text)
-    return {
-        "city":     city,
-        "name":     name,
-        "hotel_id": hid.group(1) if hid else "",
-        "rating":   rating.group(1) if rating else "",
-        "url":      url.group(0) if url else "",
-    }
+
+    url     = URL_RE.search(text)
+    hotel_id = HOTEL_ID_RE.search(text)
+
+    # 用DeepSeek提取结构化信息
+    if not DEEPSEEK_KEY:
+        # 没有key时fallback到携程格式
+        from re import compile as rc
+        pair = rc(r'[<＜]([^<>＜＞]{1,10})[>＞]\s*[<＜]([^<>＜＞]+)[>＞]').search(text)
+        if not pair:
+            return None
+        rating = RATING_RE.search(text)
+        return {"city": pair.group(1).strip(), "name": pair.group(2).strip(),
+                "rating": rating.group(1) if rating else "",
+                "url": url.group(0) if url else "",
+                "hotel_id": hotel_id.group(1) if hotel_id else ""}
+    try:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+            json={"model": "deepseek-chat", "max_tokens": 100,
+                  "messages": [{"role": "system", "content": EXTRACT_PROMPT},
+                                {"role": "user", "content": text[:500]}]},
+            timeout=10
+        ).json()
+        content = r["choices"][0]["message"]["content"].strip()
+        # 清理可能的markdown代码块
+        content = re.sub(r'^```[a-z]*\n?|\n?```$', '', content).strip()
+        result = json.loads(content)
+        if not result or not result.get("name") or not result.get("city"):
+            return None
+        return {
+            "name":     result["name"],
+            "city":     result["city"],
+            "rating":   str(result.get("rating", "")),
+            "url":      url.group(0) if url else "",
+            "hotel_id": hotel_id.group(1) if hotel_id else "",
+        }
+    except Exception as e:
+        print("parse_hotel_text error:", e)
+        return None
 
 def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None]:
     """用高德POI搜索拿经纬度"""
@@ -172,9 +204,11 @@ def classify_intent(text: str, msgtype: str) -> str:
     """返回 intent: onboarding | import | done | clear | chitchat"""
     if msgtype in ("image", "miniprogram"):
         return "import"
-    if parse_ctrip_text(text):
+    if parse_hotel_text(text):
         return "import"
-    if re.search(r'https?://', text) and any(k in text for k in ["ctrip", "trip", "hotel", "酒店", "qunar", "meituan"]):
+    HOTEL_DOMAINS = ["ctrip", "qunar", "meituan", "fliggy", "alitrip", "ly.com",
+                     "dianping", "tongcheng", "hotel", "酒店", "住宿"]
+    if re.search(r'https?://', text) and any(k in text for k in HOTEL_DOMAINS):
         return "import"
     if any(k in text for k in CLEAR_KEYWORDS):
         return "clear"
@@ -235,7 +269,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str):
     # ── 状态2：闲聊（中枢）──────────────────────────────────────────────────
     # 分支A：导入意图
     if intent == "import":
-        ctrip = parse_ctrip_text(text)
+        ctrip = parse_hotel_text(text)
         if ctrip:
             # 同一hotelId不重复入库
             if ctrip["hotel_id"]:
