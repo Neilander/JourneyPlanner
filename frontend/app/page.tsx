@@ -159,7 +159,7 @@ export default function Home() {
     if (!searchKeyword.trim()) return
     setSearching(true)
     try {
-      const res = await fetch(`${API_BASE}/api/poi/search?keyword=${encodeURIComponent(searchKeyword)}`)
+      const res = await fetch(`${API_BASE}/api/poi/search?keyword=${encodeURIComponent(searchKeyword)}&city=${encodeURIComponent(cityName)}`)
       const data = await res.json()
       setSearchResults(data.pois || [])
     } catch {
