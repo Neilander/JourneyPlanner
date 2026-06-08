@@ -145,7 +145,7 @@ def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None
     try:
         r = requests.get("https://restapi.amap.com/v3/place/text", params={
             "key": AMAP_WEB_KEY, "keywords": name, "city": city,
-            "citylimit": "true", "types": "050000", "offset": 1, "output": "json",
+            "citylimit": "true", "types": "050100|050200|050300|050400|050900", "offset": 1, "output": "json",
         }, timeout=5).json()
         pois = r.get("pois", [])
         if pois:
@@ -386,7 +386,7 @@ async def receive(request: Request, background_tasks: BackgroundTasks,
 async def poi_search(keyword: str, city: str = "西安"):
     r = requests.get("https://restapi.amap.com/v3/place/text", params={
         "key": AMAP_WEB_KEY, "keywords": keyword, "city": city,
-        "citylimit": "true", "types": "050000", "offset": 10, "output": "json",
+        "citylimit": "true", "types": "050100|050200|050300|050400|050900", "offset": 10, "output": "json",
     }).json()
     pois = []
     for p in r.get("pois", []):
