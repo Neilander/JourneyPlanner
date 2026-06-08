@@ -47,9 +47,23 @@ def init_db():
             created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS kv (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
         """)
 
 init_db()
+
+def kv_get(key: str) -> str | None:
+    with get_db() as conn:
+        row = conn.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        return row[0] if row else None
+
+def kv_set(key: str, value: str):
+    with get_db() as conn:
+        conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
 
 def get_or_create_user(wecom_id: str) -> sqlite3.Row:
     with get_db() as conn:
@@ -255,7 +269,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 crypto = WeChatCrypto(TOKEN, AES_KEY, CORP_ID)
-_cursor = None
 _processed_msg_ids: set = set()
 
 def get_access_token():
@@ -292,14 +305,16 @@ def send_text(open_kfid: str, user_id: str, text: str):
     print("send_msg:", r.json())
 
 def process_messages(sync_token: str, open_kf_id: str):
-    global _cursor
+    cursor = kv_get("sync_cursor")
     payload = {"token": sync_token, "open_kfid": open_kf_id, "limit": 1000}
-    if _cursor:
-        payload["cursor"] = _cursor
+    if cursor:
+        payload["cursor"] = cursor
     resp = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg",
                          params={"access_token": get_access_token()}, json=payload).json()
     print("sync_msg:", json.dumps(resp, ensure_ascii=False))
-    _cursor = resp.get("next_cursor", _cursor)
+    next_cursor = resp.get("next_cursor")
+    if next_cursor:
+        kv_set("sync_cursor", next_cursor)
     for m in resp.get("msg_list", []):
         msg_id = m.get("msgid", "")
         if msg_id and msg_id in _processed_msg_ids:
