@@ -53,6 +53,7 @@ export default function Home() {
   const AMapRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hotelMarkersRef = useRef<any[]>([])
+  const uidRef = useRef<string>('')
 
   const [tab, setTab] = useState<'map' | 'rank'>('map')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -60,17 +61,20 @@ export default function Home() {
   const [attractions, setAttractions] = useState<Attraction[]>(XIAN_ATTRACTIONS)
   const [cityName, setCityName] = useState('西安')
   const [mapCenter, setMapCenter] = useState<[number, number]>(XIAN_CENTER)
+  const [mapReady, setMapReady] = useState(0)  // bumped when map is recreated
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchResults, setSearchResults] = useState<Hotel[]>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [showCityPicker, setShowCityPicker] = useState(false)
+  const [showHotelManager, setShowHotelManager] = useState(false)
   const [cityInput, setCityInput] = useState('')
 
-  // 从URL ?uid= 加载Bot收录的酒店和城市
+  // 从URL ?uid= 加载Bot收录的酒店、城市、已选景点
   useEffect(() => {
     const uid = new URLSearchParams(window.location.search).get('uid')
     if (!uid) return
+    uidRef.current = uid
     fetch(`${API_BASE}/api/user/hotels?wecom_id=${encodeURIComponent(uid)}`)
       .then(r => r.json())
       .then(async data => {
@@ -79,13 +83,29 @@ export default function Home() {
           .map((h: any) => ({ id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat }))
         if (loaded.length > 0) setHotels(loaded)
 
+        // 恢复已选景点（按名称匹配，加载后在attractions更新时再处理）
+        const savedNames: string[] = data.selected_attractions || []
+
         // 加载城市景点和中心
         const city = data.city || '西安'
+        setCityName(city)
         if (city !== '西安') {
-          setCityName(city)
           const info = await fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(city)}`).then(r => r.json())
           if (info.center) setMapCenter([info.center.lng, info.center.lat])
-          if (info.attractions?.length > 0) setAttractions(info.attractions)
+          if (info.attractions?.length > 0) {
+            setAttractions(info.attractions)
+            // 用新景点列表匹配已保存的名称
+            const ids = new Set<string>(
+              info.attractions.filter((a: Attraction) => savedNames.includes(a.name)).map((a: Attraction) => a.id)
+            )
+            if (ids.size > 0) setSelected(ids)
+          }
+        } else if (savedNames.length > 0) {
+          // 西安默认景点按名称匹配
+          const ids = new Set<string>(
+            XIAN_ATTRACTIONS.filter(a => savedNames.includes(a.name)).map(a => a.id)
+          )
+          if (ids.size > 0) setSelected(ids)
         }
       })
       .catch(() => {})
@@ -106,6 +126,7 @@ export default function Home() {
           mapStyle: 'amap://styles/whitesmoke',
         })
         mapRef.current = map
+        setMapReady(n => n + 1)
 
         attractions.forEach(a => {
           const marker = new AMap.Marker({
@@ -147,14 +168,37 @@ export default function Home() {
       })
     }
     tryRender()
-  }, [hotels])
+  }, [hotels, mapReady])
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
+      // 保存已选景点到后端
+      if (uidRef.current) {
+        const names = attractions.filter(a => next.has(a.id)).map(a => a.name)
+        fetch(`${API_BASE}/api/user/selections`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wecom_id: uidRef.current, attractions: names }),
+        }).catch(() => {})
+      }
       return next
     })
+  }
+
+  const removeHotel = async (hotelId: string) => {
+    if (!uidRef.current) return
+    await fetch(`${API_BASE}/api/user/hotel/${hotelId}?wecom_id=${encodeURIComponent(uidRef.current)}`, {
+      method: 'DELETE',
+    }).catch(() => {})
+    setHotels(prev => prev.filter(h => h.id !== hotelId))
+    // 同步移除地图标记
+    const idx = hotels.findIndex(h => h.id === hotelId)
+    if (idx !== -1 && hotelMarkersRef.current[idx]) {
+      hotelMarkersRef.current[idx].setMap(null)
+      hotelMarkersRef.current.splice(idx, 1)
+    }
   }
 
   const handleSearch = async () => {
@@ -293,6 +337,12 @@ export default function Home() {
               className={`px-3 py-1 rounded-full transition-colors ${tab === 'rank' ? 'bg-white text-gray-900 font-medium' : 'text-gray-400'}`}
             >排行榜</button>
           </div>
+          {hotels.length > 0 && (
+            <button
+              onClick={() => setShowHotelManager(true)}
+              className="text-sm bg-gray-600 px-3 py-1 rounded-full"
+            >管理 {hotels.length}</button>
+          )}
           <button
             onClick={() => setShowSearch(true)}
             className="text-sm bg-orange-500 px-3 py-1 rounded-full"
@@ -339,6 +389,32 @@ export default function Home() {
         </div>
       )}
 
+      {/* Hotel manager modal */}
+      {showHotelManager && (
+        <div className="absolute inset-0 bg-black/60 z-50 flex flex-col">
+          <div className="bg-white m-4 mt-16 rounded-xl overflow-hidden flex flex-col max-h-[70vh]">
+            <div className="flex items-center justify-between p-3 border-b">
+              <span className="font-medium text-sm">候选酒店（{hotels.length}家）</span>
+              <button onClick={() => setShowHotelManager(false)} className="text-gray-400 text-sm">完成</button>
+            </div>
+            <div className="overflow-y-auto">
+              {hotels.length === 0 && (
+                <p className="text-center text-gray-400 text-sm py-8">暂无候选酒店</p>
+              )}
+              {hotels.map(h => (
+                <div key={h.id} className="flex items-center px-4 py-3 border-b">
+                  <span className="flex-1 text-sm text-gray-900">{h.name}</span>
+                  <button
+                    onClick={() => removeHotel(h.id)}
+                    className="ml-2 text-red-400 text-xs px-2 py-1 rounded hover:bg-red-50"
+                  >删除</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Map */}
       <div
         ref={containerRef}
@@ -372,6 +448,7 @@ export default function Home() {
                     </span>
                     <span className="text-white font-medium text-sm flex-1">{item.hotel.name}</span>
                     <span className="text-orange-400 font-bold text-sm">avg {item.avg} min</span>
+                    <button onClick={() => removeHotel(item.hotel.id)} className="ml-2 text-gray-500 hover:text-red-400 text-xs">✕</button>
                   </div>
                   <div className="ml-8 space-y-1">
                     {item.targets.map((a, j) => (

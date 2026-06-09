@@ -33,8 +33,9 @@ def init_db():
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             wecom_id    TEXT UNIQUE NOT NULL,
             bot_state   INTEGER DEFAULT 1,  -- 1=onboarding 2=chitchat 3=import 4=delivery
-            city        TEXT DEFAULT '西安',
-            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+            city                 TEXT DEFAULT '西安',
+            selected_attractions TEXT DEFAULT '[]',
+            created_at           DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS hotels (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +81,10 @@ def migrate_db():
         if "platform" not in cols:
             conn.execute("ALTER TABLE hotels ADD COLUMN platform TEXT DEFAULT ''")
             print("DB migration: added platform column to hotels")
+        user_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "selected_attractions" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN selected_attractions TEXT DEFAULT '[]'")
+            print("DB migration: added selected_attractions column to users")
         conn.commit()
 
 migrate_db()
@@ -829,7 +834,31 @@ async def poi_search(keyword: str, city: str = "西安"):
 @app.get("/api/user/hotels")
 async def user_hotels(wecom_id: str):
     user = get_or_create_user(wecom_id)
-    return {"hotels": get_hotels(user["id"]), "city": user["city"]}
+    return {
+        "hotels": get_hotels(user["id"]),
+        "city": user["city"],
+        "selected_attractions": json.loads(user.get("selected_attractions") or "[]"),
+    }
+
+@app.post("/api/user/selections")
+async def save_selections(body: dict):
+    wecom_id = body.get("wecom_id", "")
+    attractions = body.get("attractions", [])
+    if not wecom_id:
+        return {"ok": False}
+    with get_db() as conn:
+        conn.execute("UPDATE users SET selected_attractions=? WHERE wecom_id=?",
+                     (json.dumps(attractions, ensure_ascii=False), wecom_id))
+        conn.commit()
+    return {"ok": True}
+
+@app.delete("/api/user/hotel/{hotel_id}")
+async def delete_user_hotel(hotel_id: int, wecom_id: str):
+    user = get_or_create_user(wecom_id)
+    with get_db() as conn:
+        conn.execute("DELETE FROM hotels WHERE id=? AND user_id=?", (hotel_id, user["id"]))
+        conn.commit()
+    return {"ok": True}
 
 @app.get("/api/city/info")
 async def city_info(city: str):
