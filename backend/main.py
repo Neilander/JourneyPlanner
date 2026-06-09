@@ -1126,10 +1126,30 @@ async def poi_search(keyword: str, city: str = "西安"):
     return {"pois": pois}
 
 @app.get("/api/user/hotels")
-async def user_hotels(wecom_id: str):
+async def user_hotels(wecom_id: str, background_tasks: BackgroundTasks):
     user = get_or_create_user(wecom_id)
+    hotels = get_hotels(user["id"])
+    # 内嵌 analysis，没有的酒店后台触发补跑
+    with get_db() as conn:
+        for h in hotels:
+            row = conn.execute(
+                "SELECT * FROM hotel_analysis WHERE hotel_db_id=?", (h["id"],)
+            ).fetchone()
+            if row:
+                h["analysis"] = {
+                    "amap_rating": row["amap_rating"],
+                    "amap_reviews": row["amap_reviews"],
+                    "summary": json.loads(row["summary"]) if row["summary"] else None,
+                }
+            else:
+                h["analysis"] = None
+                # 没有分析记录 → 后台补跑
+                background_tasks.add_task(
+                    run_hotel_analysis,
+                    h["id"], h["name"], h.get("hotel_id", ""), ""
+                )
     return {
-        "hotels": get_hotels(user["id"]),
+        "hotels": hotels,
         "city": user["city"],
         "selected_attractions": json.loads(user.get("selected_attractions") or "[]"),
     }

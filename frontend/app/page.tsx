@@ -91,11 +91,11 @@ export default function Home() {
       .then(async data => {
         const loaded: Hotel[] = (data.hotels || [])
           .filter((h: any) => h.lat && h.lng)
-          .map((h: any) => ({ id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat }))
-        if (loaded.length > 0) {
-          setHotels(loaded)
-          loadAnalysis(loaded)
-        }
+          .map((h: any) => ({
+            id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat,
+            analysis: h.analysis ?? undefined,
+          }))
+        if (loaded.length > 0) setHotels(loaded)
 
         // 恢复已选景点（按名称匹配，加载后在attractions更新时再处理）
         const savedNames: string[] = data.selected_attractions || []
@@ -398,8 +398,15 @@ export default function Home() {
           {hotels.length > 0 && (
             <button
               onClick={() => setShowHotelManager(true)}
-              className="text-sm bg-gray-600 px-3 py-1 rounded-full"
-            >管理 {hotels.length}</button>
+              className={`text-sm px-3 py-1 rounded-full ${
+                hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高'))
+                  ? 'bg-red-500 text-white'
+                  : 'bg-gray-600 text-white'
+              }`}
+            >
+              {hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高')) ? '⚠ ' : ''}
+              酒店 {hotels.length}
+            </button>
           )}
           <button
             onClick={() => setShowSearch(true)}
