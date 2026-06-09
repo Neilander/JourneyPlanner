@@ -126,7 +126,7 @@ story.append(card('模块 C ｜ 智能删除（重，独立状态 5）',
 
 # ===== 3. 闲聊决策树 =====
 story.append(Paragraph('3 ｜ 状态 2（闲聊 idle）决策树', h1_s))
-story.append(Paragraph('每收到一条消息，先做<b>语义判断（LLM）</b>，归入五个分支之一：', body_s))
+story.append(Paragraph('每收到一条消息，先做<b>语义判断（LLM）</b>，归入六个分支之一：', body_s))
 story.append(card('分支 A ｜ 导入酒店（发链接 / 截图，不引导酒店名）',
     ['已选城市？ 否 → 引导先选城市；是 → 进【状态 3 导入】→ 存库 → 回 idle。'], LIGHT))
 story.append(card('分支 B ｜ 完成导入（「好了」「看结果」「没了」）',
@@ -137,6 +137,9 @@ story.append(card('分支 D ｜ 安全质疑（模块 B）',
     ['回「链接可信，正在备案」安抚 → 维持 idle。'], BLUEBG))
 story.append(card('分支 E ｜ 删除酒店（模块 C）',
     ['进入【状态 5 删除】。'], GREENBG))
+story.append(card('分支 F ｜ 帮助意图（复用模块 A）',
+    ['触发：「你能干嘛」「怎么用」「帮助」「不会用」等 → 重发功能介绍对照表 → 维持 idle。',
+     '即：功能介绍不只首次引入触发，闲聊中求助也能随时调出。'], GRAYBG))
 
 # ===== 4. 状态5 子状态机 =====
 story.append(Paragraph('4 ｜ 状态 5 ｜ 删除酒店（子状态机）', h1_s))
