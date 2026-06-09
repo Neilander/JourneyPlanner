@@ -938,6 +938,63 @@ def fetch_amap_hotel_rating(amap_poi_id: str) -> tuple[float | None, int]:
         print("amap_rating error:", e)
     return None, 0
 
+def fetch_amap_reviews(amap_poi_id: str, max_reviews: int = 30) -> list[str]:
+    """用高德 API 拉取 POI 评论，返回评论文本列表"""
+    if not amap_poi_id:
+        return []
+    reviews = []
+    try:
+        # 高德评论接口（需 Web 服务 key）
+        for page in range(1, 4):
+            r = requests.get(
+                "https://restapi.amap.com/v3/place/detail",
+                params={
+                    "key": AMAP_WEB_KEY,
+                    "id": amap_poi_id,
+                    "output": "json",
+                    "extensions": "all",
+                },
+                timeout=8
+            ).json()
+            pois = r.get("pois", [])
+            if not pois:
+                break
+            # 评论在 biz_ext.navi 或 event 字段中，也可能在 photos 里的描述
+            p = pois[0]
+            # 尝试从 event 和 深度字段取评论
+            for ev in p.get("event", []):
+                desc = ev.get("description", "")
+                if desc and len(desc) > 10:
+                    reviews.append(desc)
+            break  # 高德 detail 不分页，一次够了
+    except Exception as e:
+        print("amap_reviews error:", e)
+
+    # 高德 Web API 评论字段有限，用搜索补充
+    if len(reviews) < 5:
+        try:
+            r2 = requests.get(
+                "https://restapi.amap.com/v5/place/detail",
+                params={
+                    "key": AMAP_WEB_KEY,
+                    "id": amap_poi_id,
+                    "show_fields": "business,rating,comment",
+                    "output": "json",
+                },
+                timeout=8
+            ).json()
+            for item in (r2.get("pois") or []):
+                biz = item.get("business") or {}
+                for c in biz.get("comment", {}).get("list", []):
+                    txt = c.get("content", "")
+                    if txt and len(txt) > 10:
+                        reviews.append(txt)
+        except Exception as e:
+            print("amap_reviews_v5 error:", e)
+
+    print(f"amap reviews fetched: {len(reviews)} for poi={amap_poi_id}")
+    return reviews[:max_reviews]
+
 def fetch_ctrip_reviews(hotel_id: str, max_reviews: int = 30) -> list[str]:
     """抓取携程手机端评论，返回评论文本列表"""
     if not hotel_id:
@@ -951,8 +1008,8 @@ def fetch_ctrip_reviews(hotel_id: str, max_reviews: int = 30) -> list[str]:
         "Origin": "https://m.ctrip.com",
     }
     reviews = []
-    # 策略1：JSON API（优先尝试）
-    for page in range(1, 3):  # 拉2页，约60条
+    # 策略1：JSON API
+    for page in range(1, 3):
         try:
             r = requests.post(
                 "https://m.ctrip.com/restapi/soa2/13444/json/getHotelCommentList",
@@ -961,7 +1018,7 @@ def fetch_ctrip_reviews(hotel_id: str, max_reviews: int = 30) -> list[str]:
                     "hotelId": int(hotel_id),
                     "pageIndex": page,
                     "pageSize": max_reviews // 2,
-                    "sortType": 1,          # 1=最新 2=最热
+                    "sortType": 1,
                     "filterType": 0,
                     "head": {"cid": "09031014111144141", "ctok": "", "cver": "1.0",
                              "lang": "01", "sid": "8888", "syscode": "09"},
@@ -974,7 +1031,7 @@ def fetch_ctrip_reviews(hotel_id: str, max_reviews: int = 30) -> list[str]:
                 if content and len(content) > 10:
                     reviews.append(content)
             if items:
-                break  # 第一策略成功，不用试备用
+                break
         except Exception as e:
             print(f"ctrip_api page{page} error:", e)
 
@@ -985,9 +1042,8 @@ def fetch_ctrip_reviews(hotel_id: str, max_reviews: int = 30) -> list[str]:
                 f"https://m.ctrip.com/webapp/hotel/{hotel_id}",
                 headers=headers, timeout=10
             )
-            # 从 HTML 中正则提取评论文本
             texts = re.findall(r'"content"\s*:\s*"([^"]{20,500})"', resp.text)
-            reviews = list(dict.fromkeys(texts))[:max_reviews]  # 去重
+            reviews = list(dict.fromkeys(texts))[:max_reviews]
         except Exception as e:
             print("ctrip_html error:", e)
 
@@ -1039,8 +1095,31 @@ def run_hotel_analysis(hotel_db_id: int, hotel_name: str, hotel_id: str, amap_po
         hotel_id = search_ctrip_hotel_id(hotel_name, city)
 
     amap_rating, amap_count = fetch_amap_hotel_rating(amap_poi_id)
-    reviews = fetch_ctrip_reviews(hotel_id)
-    summary = analyze_hotel_reviews(reviews, hotel_name)
+    # 高德评论 + 携程评论合并（高德更稳定，携程内容更丰富）
+    amap_reviews_list = fetch_amap_reviews(amap_poi_id)
+    ctrip_reviews_list = fetch_ctrip_reviews(hotel_id)
+    # 去重合并，高德优先放前面
+    seen = set()
+    reviews = []
+    for r in amap_reviews_list + ctrip_reviews_list:
+        key = r[:50]
+        if key not in seen:
+            seen.add(key)
+            reviews.append(r)
+    print(f"[analysis] total reviews: {len(reviews)} (amap={len(amap_reviews_list)}, ctrip={len(ctrip_reviews_list)})")
+
+    # 即使没有评论，只要有高德评分也生成一个基础分析
+    if not reviews and amap_rating:
+        # 根据评分生成一个简单的 verdict，不需要 DeepSeek
+        if amap_rating >= 4.5:
+            verdict = f"高德评分 {amap_rating}，口碑良好。"
+        elif amap_rating >= 4.0:
+            verdict = f"高德评分 {amap_rating}，整体评价尚可，建议参考更多评论。"
+        else:
+            verdict = f"高德评分 {amap_rating}，评分偏低，建议谨慎考虑。"
+        summary = {"highlights": [], "warnings": [], "verdict": verdict}
+    else:
+        summary = analyze_hotel_reviews(reviews, hotel_name)
     with get_db() as conn:
         conn.execute("""
             INSERT OR REPLACE INTO hotel_analysis
@@ -1290,6 +1369,22 @@ async def hotel_analysis(hotel_id: int):
         "amap_reviews": row["amap_reviews"],
         "summary": summary,
     }
+
+@app.post("/api/hotel/reanalyze")
+async def reanalyze_hotel(body: dict, background_tasks: BackgroundTasks):
+    """强制重新分析某用户所有酒店（清掉旧记录，重新跑）"""
+    wecom_id = body.get("wecom_id", "")
+    if not wecom_id:
+        return {"ok": False}
+    user = get_or_create_user(wecom_id)
+    hotels = get_hotels(user["id"])
+    with get_db() as conn:
+        for h in hotels:
+            conn.execute("DELETE FROM hotel_analysis WHERE hotel_db_id=?", (h["id"],))
+        conn.commit()
+    for h in hotels:
+        background_tasks.add_task(run_hotel_analysis, h["id"], h["name"], h.get("hotel_id", ""), "")
+    return {"ok": True, "count": len(hotels)}
 
 @app.delete("/api/user/hotel/{hotel_id}")
 async def delete_user_hotel(hotel_id: int, wecom_id: str):
