@@ -59,6 +59,13 @@ def init_db():
             msgid TEXT PRIMARY KEY,
             ts    DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS usage_log (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            wecom_id  TEXT NOT NULL,
+            action    TEXT NOT NULL,   -- 'msg' | 'ocr' | 'deepseek'
+            ts        DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_usage_log ON usage_log(wecom_id, action, ts);
         """)
 
 init_db()
@@ -76,6 +83,59 @@ def migrate_db():
         conn.commit()
 
 migrate_db()
+
+# ── 频率限制 ──────────────────────────────────────────────────────────────────
+# 单用户限制
+USER_LIMITS = {
+    "msg":      (50,  "hour"),   # 每小时最多50条消息
+    "ocr":      (20,  "day"),    # 每天最多20张图片
+    "deepseek": (100, "day"),    # 每天最多100次DeepSeek
+}
+# 全局每日上限（所有用户合计）
+GLOBAL_DAILY_LIMITS = {
+    "ocr":      200,
+    "deepseek": 1000,
+}
+
+def _window_start(window: str) -> str:
+    """返回当前时间窗口的起始时间字符串（ISO格式）"""
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    if window == "hour":
+        start = now.replace(minute=0, second=0, microsecond=0)
+    else:  # day
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start.isoformat()
+
+def log_usage(wecom_id: str, action: str):
+    with get_db() as conn:
+        conn.execute("INSERT INTO usage_log (wecom_id, action) VALUES (?, ?)", (wecom_id, action))
+        conn.commit()
+
+def check_rate_limit(wecom_id: str, action: str) -> str | None:
+    """返回 None 表示允许，返回字符串表示拒绝原因（直接发给用户）"""
+    limit, window = USER_LIMITS.get(action, (9999, "day"))
+    win_start = _window_start(window)
+    with get_db() as conn:
+        # 用户级别检查
+        count = conn.execute(
+            "SELECT COUNT(*) FROM usage_log WHERE wecom_id=? AND action=? AND ts>=?",
+            (wecom_id, action, win_start)
+        ).fetchone()[0]
+        if count >= limit:
+            unit = "小时" if window == "hour" else "天"
+            return f"你今{'天' if window=='day' else '小时'}的{'图片' if action=='ocr' else '消息'}发送太频繁啦，每{unit}最多 {limit} 次，稍后再试～"
+        # 全局检查
+        global_limit = GLOBAL_DAILY_LIMITS.get(action)
+        if global_limit:
+            day_start = _window_start("day")
+            global_count = conn.execute(
+                "SELECT COUNT(*) FROM usage_log WHERE action=? AND ts>=?",
+                (action, day_start)
+            ).fetchone()[0]
+            if global_count >= global_limit:
+                return "服务今日请求量已达上限，明天再来吧～"
+    return None
 
 def kv_get(key: str) -> str | None:
     with get_db() as conn:
@@ -477,6 +537,20 @@ def deepseek_chat(user_msg: str) -> str:
 
 def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
                         miniprogram: dict = None, image_bytes: bytes = None):
+    # ── 频率检查 ─────────────────────────────────────────────────────────────
+    deny = check_rate_limit(user_id, "msg")
+    if deny:
+        send_text(open_kfid, user_id, deny)
+        return
+    log_usage(user_id, "msg")
+
+    if image_bytes:
+        deny = check_rate_limit(user_id, "ocr")
+        if deny:
+            send_text(open_kfid, user_id, deny)
+            return
+        log_usage(user_id, "ocr")
+
     user = get_or_create_user(user_id)
     bot_state = user["bot_state"]
     hotel_count = get_hotel_count(user["id"])
@@ -628,6 +702,11 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         return
 
     # 分支C：普通闲聊
+    deny = check_rate_limit(user_id, "deepseek")
+    if deny:
+        send_text(open_kfid, user_id, deny)
+        return
+    log_usage(user_id, "deepseek")
     reply = deepseek_chat(text)
     send_text(open_kfid, user_id, reply)
 
