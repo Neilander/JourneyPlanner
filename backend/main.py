@@ -852,6 +852,29 @@ async def save_selections(body: dict):
         conn.commit()
     return {"ok": True}
 
+@app.post("/api/user/hotel")
+async def add_user_hotel(body: dict):
+    wecom_id = body.get("wecom_id", "")
+    h = body.get("hotel", {})
+    if not wecom_id or not h.get("name"):
+        return {"ok": False, "id": None}
+    user = get_or_create_user(wecom_id)
+    # 避免重复（同名同坐标）
+    with get_db() as conn:
+        exists = conn.execute(
+            "SELECT id FROM hotels WHERE user_id=? AND name=?",
+            (user["id"], h["name"])
+        ).fetchone()
+        if exists:
+            return {"ok": True, "id": exists["id"]}
+        cur = conn.execute(
+            "INSERT INTO hotels (user_id, name, city, lat, lng, source_url, hotel_id, rating, raw_text, platform) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (user["id"], h["name"], h.get("city", ""), h.get("lat"), h.get("lng"),
+             "", h.get("amap_id", ""), "", "", "前端搜索")
+        )
+        conn.commit()
+        return {"ok": True, "id": cur.lastrowid}
+
 @app.delete("/api/user/hotel/{hotel_id}")
 async def delete_user_hotel(hotel_id: int, wecom_id: str):
     user = get_or_create_user(wecom_id)

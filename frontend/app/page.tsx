@@ -188,16 +188,13 @@ export default function Home() {
   }
 
   const removeHotel = async (hotelId: string) => {
-    if (!uidRef.current) return
-    await fetch(`${API_BASE}/api/user/hotel/${hotelId}?wecom_id=${encodeURIComponent(uidRef.current)}`, {
-      method: 'DELETE',
-    }).catch(() => {})
+    // 先更新本地（markers useEffect 会自动重绘）
     setHotels(prev => prev.filter(h => h.id !== hotelId))
-    // 同步移除地图标记
-    const idx = hotels.findIndex(h => h.id === hotelId)
-    if (idx !== -1 && hotelMarkersRef.current[idx]) {
-      hotelMarkersRef.current[idx].setMap(null)
-      hotelMarkersRef.current.splice(idx, 1)
+    // 再同步后端
+    if (uidRef.current) {
+      fetch(`${API_BASE}/api/user/hotel/${hotelId}?wecom_id=${encodeURIComponent(uidRef.current)}`, {
+        method: 'DELETE',
+      }).catch(() => {})
     }
   }
 
@@ -215,29 +212,31 @@ export default function Home() {
     }
   }
 
-  const addHotel = (hotel: Hotel) => {
+  const addHotel = async (hotel: Hotel) => {
     if (hotels.find(h => h.id === hotel.id)) return
-    setHotels(prev => [...prev, hotel])
     setShowSearch(false)
     setSearchResults([])
     setSearchKeyword('')
 
-    const AMap = AMapRef.current
-    const map = mapRef.current
-    if (!AMap || !map) return
+    let finalId = hotel.id
+    // 同步到后端（有 uid 时）
+    if (uidRef.current) {
+      try {
+        const res = await fetch(`${API_BASE}/api/user/hotel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            wecom_id: uidRef.current,
+            hotel: { name: hotel.name, lat: hotel.lat, lng: hotel.lng, amap_id: hotel.id, city: cityName },
+          }),
+        }).then(r => r.json())
+        if (res.id) finalId = String(res.id)
+      } catch {}
+    }
 
-    const marker = new AMap.Marker({
-      position: [hotel.lng, hotel.lat],
-      title: hotel.name,
-      content: `<div style="display:flex;flex-direction:column;align-items:center">
-        <div style="background:#f97316;color:white;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25)">${hotel.name}</div>
-        <div style="width:10px;height:10px;background:#f97316;border-radius:50%;margin-top:3px;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></div>
-      </div>`,
-      offset: new AMap.Pixel(-40, -28),
-    })
-    marker.setMap(map)
-    hotelMarkersRef.current.push(marker)
-    map.setCenter([hotel.lng, hotel.lat])
+    // 用后端返回的真实 DB id 更新本地
+    setHotels(prev => [...prev, { ...hotel, id: finalId }])
+    mapRef.current?.setCenter([hotel.lng, hotel.lat])
   }
 
   // Compute ranking based on selected attractions
