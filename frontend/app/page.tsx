@@ -428,7 +428,7 @@ export default function Home() {
 
       {/* Commute settings panel */}
       {showSettings && (
-        <div className="absolute inset-0 bg-black/60 z-50 flex flex-col justify-end">
+        <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col justify-end">
           <div className="bg-white rounded-t-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <span className="font-bold text-base">通勤偏好</span>
@@ -528,14 +528,14 @@ export default function Home() {
                       {i + 1}
                     </span>
                     <span className="text-white font-medium text-sm flex-1">{item.hotel.name}</span>
-                    <span className="text-orange-400 font-bold text-sm">avg {item.avg} min</span>
+                    <span className="text-orange-400 font-bold text-sm">均 {item.avg} 分钟</span>
                     <button onClick={() => removeHotel(item.hotel.id)} className="ml-2 text-gray-500 hover:text-red-400 text-xs">✕</button>
                   </div>
                   <div className="ml-8 space-y-1">
                     {item.targets.map((a, j) => (
                       <div key={a.id} className="flex justify-between text-xs text-gray-400">
                         <span>{a.name}</span>
-                        <span>{item.times[j]} min</span>
+                        <span>{item.times[j]} 分钟</span>
                       </div>
                     ))}
                   </div>
