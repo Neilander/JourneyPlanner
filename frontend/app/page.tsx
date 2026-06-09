@@ -81,26 +81,21 @@ export default function Home() {
   const [commuteMatrix, setCommuteMatrix] = useState<Record<string, Record<string, number>>>({})
   const [matrixLoading, setMatrixLoading] = useState(false)
 
-  // 从URL ?uid= 加载Bot收录的酒店、城市、已选景点
-  useEffect(() => {
-    const uid = new URLSearchParams(window.location.search).get('uid')
-    if (!uid) return
-    uidRef.current = uid
-    fetch(`${API_BASE}/api/user/hotels?wecom_id=${encodeURIComponent(uid)}`)
-      .then(r => r.json())
-      .then(async data => {
-        const loaded: Hotel[] = (data.hotels || [])
-          .filter((h: any) => h.lat && h.lng)
-          .map((h: any) => ({
-            id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat,
-            analysis: h.analysis ?? undefined,
-          }))
-        if (loaded.length > 0) setHotels(loaded)
+  // 从URL ?uid= 加载Bot收录的酒店、城市、已选景点（返回是否有待分析的酒店）
+  const loadHotels = async (uid: string, firstLoad = false): Promise<boolean> => {
+    try {
+      const data = await fetch(`${API_BASE}/api/user/hotels?wecom_id=${encodeURIComponent(uid)}`).then(r => r.json())
+      const loaded: Hotel[] = (data.hotels || [])
+        .filter((h: any) => h.lat && h.lng)
+        .map((h: any) => ({
+          id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat,
+          analysis: h.analysis ?? undefined,
+        }))
+      if (loaded.length > 0) setHotels(loaded)
 
-        // 恢复已选景点（按名称匹配，加载后在attractions更新时再处理）
+      if (firstLoad) {
+        // 恢复已选景点（按名称匹配）
         const savedNames: string[] = data.selected_attractions || []
-
-        // 加载城市景点和中心
         const city = data.city || '西安'
         setCityName(city)
         if (city !== '西安') {
@@ -108,21 +103,40 @@ export default function Home() {
           if (info.center) setMapCenter([info.center.lng, info.center.lat])
           if (info.attractions?.length > 0) {
             setAttractions(info.attractions)
-            // 用新景点列表匹配已保存的名称
             const ids = new Set<string>(
               info.attractions.filter((a: Attraction) => savedNames.includes(a.name)).map((a: Attraction) => a.id)
             )
             if (ids.size > 0) setSelected(ids)
           }
         } else if (savedNames.length > 0) {
-          // 西安默认景点按名称匹配
           const ids = new Set<string>(
             XIAN_ATTRACTIONS.filter(a => savedNames.includes(a.name)).map(a => a.id)
           )
           if (ids.size > 0) setSelected(ids)
         }
-      })
-      .catch(() => {})
+      }
+
+      // 返回：是否还有酒店没有分析结果（rating和summary都空）
+      const hasPending = loaded.some(h => !h.analysis || (h.analysis.amap_rating == null && !h.analysis.summary))
+      return hasPending
+    } catch { return false }
+  }
+
+  useEffect(() => {
+    const uid = new URLSearchParams(window.location.search).get('uid')
+    if (!uid) return
+    uidRef.current = uid
+
+    loadHotels(uid, true).then(hasPending => {
+      if (!hasPending) return
+      // 有酒店还在分析中，每30秒轮询一次直到全部完成
+      const timer = setInterval(async () => {
+        const stillPending = await loadHotels(uid)
+        if (!stillPending) clearInterval(timer)
+      }, 30000)
+      // 最多轮询10次（5分钟）
+      setTimeout(() => clearInterval(timer), 300000)
+    })
   }, [])
 
   // 地图初始化
@@ -495,7 +509,16 @@ export default function Home() {
           <div className="bg-white m-4 mt-16 rounded-xl overflow-hidden flex flex-col max-h-[70vh]">
             <div className="flex items-center justify-between p-3 border-b">
               <span className="font-medium text-sm">候选酒店（{hotels.length}家）</span>
-              <button onClick={() => setShowHotelManager(false)} className="text-gray-400 text-sm">完成</button>
+              <div className="flex items-center gap-2">
+                {uidRef.current && (
+                  <button
+                    onClick={() => loadHotels(uidRef.current)}
+                    className="text-blue-500 text-xs px-2 py-0.5 rounded hover:bg-blue-50"
+                    title="刷新分析数据"
+                  >↻ 刷新</button>
+                )}
+                <button onClick={() => setShowHotelManager(false)} className="text-gray-400 text-sm">完成</button>
+              </div>
             </div>
             <div className="overflow-y-auto">
               {hotels.length === 0 && (
@@ -512,6 +535,9 @@ export default function Home() {
                     )}
                     <button onClick={() => removeHotel(h.id)} className="text-red-400 text-xs px-2 py-1 rounded hover:bg-red-50">删除</button>
                   </div>
+                  {(!h.analysis || (h.analysis.amap_rating == null && !h.analysis.summary)) && (
+                    <p className="text-xs text-gray-400 mt-1 animate-pulse">⏳ 正在分析中，请稍后刷新…</p>
+                  )}
                   {h.analysis?.summary && (
                     <div className="mt-2 space-y-1">
                       {h.analysis.summary.warnings.length > 0 && (
