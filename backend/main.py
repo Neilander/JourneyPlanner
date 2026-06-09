@@ -1,4 +1,4 @@
-import os, json, re, sqlite3, threading
+import os, json, re, sqlite3, threading, base64
 import xml.etree.ElementTree as ET
 import requests
 from fastapi import FastAPI, Request, Response, BackgroundTasks
@@ -12,7 +12,9 @@ KF_SECRET    = os.environ["WECOM_KF_SECRET"]
 TOKEN        = os.environ["WECOM_TOKEN"]
 AES_KEY      = os.environ["WECOM_AES_KEY"]
 AMAP_WEB_KEY = os.environ["AMAP_WEB_KEY"]
-DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_KEY     = os.environ.get("DEEPSEEK_API_KEY", "")
+BAIDU_OCR_API_KEY    = os.environ.get("BAIDU_OCR_API_KEY", "")
+BAIDU_OCR_SECRET_KEY = os.environ.get("BAIDU_OCR_SECRET_KEY", "")
 
 H5_URL = "https://trip.neiland.xyz"
 DB_PATH = os.path.join(os.path.dirname(__file__), "journeyplanner.db")
@@ -290,9 +292,6 @@ def parse_miniprogram(mp: dict) -> dict | None:
             print(f"parse_miniprogram error (attempt {attempt+1}):", e)
     return None
 
-IMAGE_EXTRACT_PROMPT = """这是一张酒店 App 截图，请从中提取酒店信息，以JSON格式返回：
-{"name": "酒店全名", "city": "城市名（只要城市，不要省份）", "rating": "评分数字或空字符串"}
-如果图中没有明确的酒店信息，返回 null。只返回JSON，不要其他内容。"""
 
 def download_media(media_id: str, token: str) -> bytes | None:
     """从微信KF接口下载图片"""
@@ -308,50 +307,59 @@ def download_media(media_id: str, token: str) -> bytes | None:
         print("download_media error:", e)
     return None
 
+_baidu_ocr_token = {"token": "", "expires": 0}
+
+def get_baidu_ocr_token() -> str:
+    import time
+    if _baidu_ocr_token["token"] and time.time() < _baidu_ocr_token["expires"]:
+        return _baidu_ocr_token["token"]
+    r = requests.post(
+        "https://aip.baidubce.com/oauth/2.0/token",
+        params={"grant_type": "client_credentials",
+                "client_id": BAIDU_OCR_API_KEY,
+                "client_secret": BAIDU_OCR_SECRET_KEY},
+        timeout=5
+    ).json()
+    token = r.get("access_token", "")
+    _baidu_ocr_token["token"] = token
+    _baidu_ocr_token["expires"] = time.time() + r.get("expires_in", 2592000) - 60
+    return token
+
+def baidu_ocr(image_bytes: bytes) -> str:
+    """百度通用文字识别，返回识别出的全部文字（按行拼接）"""
+    if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
+        return ""
+    try:
+        token = get_baidu_ocr_token()
+        if not token:
+            return ""
+        r = requests.post(
+            "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic",
+            params={"access_token": token},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={"image": base64.b64encode(image_bytes).decode()},
+            timeout=10
+        ).json()
+        lines = [w["words"] for w in r.get("words_result", [])]
+        return "\n".join(lines)
+    except Exception as e:
+        print("baidu_ocr error:", e)
+        return ""
+
 def parse_hotel_image(image_bytes: bytes) -> dict | None:
-    """用 DeepSeek Vision 从截图提取酒店信息"""
-    if not DEEPSEEK_KEY or not image_bytes:
+    """OCR截图文字 → DeepSeek提取酒店结构化信息"""
+    if not image_bytes:
         return None
-    import base64
-    b64 = base64.b64encode(image_bytes).decode()
-    # 检测图片格式
-    mime = "image/jpeg"
-    if image_bytes[:4] == b'\x89PNG':
-        mime = "image/png"
-    for attempt in range(2):
-        try:
-            r = requests.post(
-                "https://api.deepseek.com/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
-                json={
-                    "model": "deepseek-chat",
-                    "max_tokens": 150,
-                    "messages": [{
-                        "role": "user",
-                        "content": [
-                            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                            {"type": "text", "text": IMAGE_EXTRACT_PROMPT}
-                        ]
-                    }]
-                },
-                timeout=20
-            ).json()
-            content = r["choices"][0]["message"]["content"].strip()
-            content = re.sub(r'^```[a-z]*\n?|\n?```$', '', content).strip()
-            result = json.loads(content)
-            if not result or not result.get("name") or not result.get("city"):
-                return None
-            return {
-                "name":     result["name"],
-                "city":     result.get("city", ""),
-                "rating":   str(result.get("rating", "")),
-                "url":      "",
-                "hotel_id": "",
-                "platform": "截图",
-            }
-        except Exception as e:
-            print(f"parse_hotel_image error (attempt {attempt+1}):", e)
-    return None
+    ocr_text = baidu_ocr(image_bytes)
+    if not ocr_text:
+        print("parse_hotel_image: OCR returned empty")
+        return None
+    print("OCR text:", ocr_text[:200])
+    # 复用文本解析流程
+    result = parse_hotel_text(ocr_text)
+    if result:
+        result["platform"] = "截图"
+    return result
 
 def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None]:
     """用高德POI搜索拿经纬度"""
