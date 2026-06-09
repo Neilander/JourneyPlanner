@@ -25,12 +25,19 @@ interface Attraction {
   lat: number
 }
 
+interface Warning { issue: string; severity: string; frequency: string; detail: string }
+interface HotelAnalysis {
+  amap_rating: number | null
+  amap_reviews: number
+  summary: { highlights: string[]; warnings: Warning[]; verdict: string } | null
+}
 interface Hotel {
   id: string
   name: string
   address: string
   lng: number
   lat: number
+  analysis?: HotelAnalysis
 }
 
 // Haversine distance in km
@@ -85,7 +92,10 @@ export default function Home() {
         const loaded: Hotel[] = (data.hotels || [])
           .filter((h: any) => h.lat && h.lng)
           .map((h: any) => ({ id: String(h.id), name: h.name, address: '', lng: h.lng, lat: h.lat }))
-        if (loaded.length > 0) setHotels(loaded)
+        if (loaded.length > 0) {
+          setHotels(loaded)
+          loadAnalysis(loaded)
+        }
 
         // 恢复已选景点（按名称匹配，加载后在attractions更新时再处理）
         const savedNames: string[] = data.selected_attractions || []
@@ -200,6 +210,17 @@ export default function Home() {
         method: 'DELETE',
       }).catch(() => {})
     }
+  }
+
+  const loadAnalysis = async (hotelList: Hotel[]) => {
+    const updated = await Promise.all(hotelList.map(async h => {
+      try {
+        const data = await fetch(`${API_BASE}/api/hotel/analysis?hotel_id=${h.id}`).then(r => r.json())
+        if (data.status === 'done') return { ...h, analysis: data as HotelAnalysis }
+      } catch {}
+      return h
+    }))
+    setHotels(updated)
   }
 
   const fetchCommuteMatrix = async (
@@ -474,12 +495,34 @@ export default function Home() {
                 <p className="text-center text-gray-400 text-sm py-8">暂无候选酒店</p>
               )}
               {hotels.map(h => (
-                <div key={h.id} className="flex items-center px-4 py-3 border-b">
-                  <span className="flex-1 text-sm text-gray-900">{h.name}</span>
-                  <button
-                    onClick={() => removeHotel(h.id)}
-                    className="ml-2 text-red-400 text-xs px-2 py-1 rounded hover:bg-red-50"
-                  >删除</button>
+                <div key={h.id} className="px-4 py-3 border-b">
+                  <div className="flex items-center">
+                    <span className="flex-1 text-sm font-medium text-gray-900">{h.name}</span>
+                    {h.analysis?.amap_rating && (
+                      <span className={`text-xs font-bold mr-2 ${h.analysis.amap_rating >= 4.5 ? 'text-green-500' : h.analysis.amap_rating >= 4.0 ? 'text-orange-400' : 'text-red-500'}`}>
+                        ★ {h.analysis.amap_rating}
+                      </span>
+                    )}
+                    <button onClick={() => removeHotel(h.id)} className="text-red-400 text-xs px-2 py-1 rounded hover:bg-red-50">删除</button>
+                  </div>
+                  {h.analysis?.summary && (
+                    <div className="mt-2 space-y-1">
+                      {h.analysis.summary.warnings.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {h.analysis.summary.warnings.map((w, i) => (
+                            <span key={i} title={w.detail} className={`text-xs px-2 py-0.5 rounded-full ${
+                              w.severity === '高' ? 'bg-red-100 text-red-600' :
+                              w.severity === '中' ? 'bg-orange-100 text-orange-600' :
+                              'bg-yellow-100 text-yellow-600'
+                            }`}>
+                              ⚠ {w.issue}{w.frequency === '个别提到' ? '（少数）' : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-400 italic">{h.analysis.summary.verdict}</p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -527,7 +570,17 @@ export default function Home() {
                     <span className={`text-sm font-bold w-6 text-center ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
                       {i + 1}
                     </span>
-                    <span className="text-white font-medium text-sm flex-1">{item.hotel.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-white font-medium text-sm">{item.hotel.name}</span>
+                      {item.hotel.analysis?.amap_rating && (
+                        <span className={`ml-2 text-xs font-bold ${item.hotel.analysis.amap_rating >= 4.5 ? 'text-green-400' : item.hotel.analysis.amap_rating >= 4.0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                          ★{item.hotel.analysis.amap_rating}
+                        </span>
+                      )}
+                      {item.hotel.analysis?.summary?.warnings.filter(w => w.severity === '高').map((w, i) => (
+                        <span key={i} title={w.detail} className="ml-1 text-xs bg-red-900/50 text-red-300 px-1.5 rounded">⚠ {w.issue}</span>
+                      ))}
+                    </div>
                     <span className="text-orange-400 font-bold text-sm">均 {item.avg} 分钟</span>
                     <button onClick={() => removeHotel(item.hotel.id)} className="ml-2 text-gray-500 hover:text-red-400 text-xs">✕</button>
                   </div>

@@ -60,6 +60,15 @@ def init_db():
             msgid TEXT PRIMARY KEY,
             ts    DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS hotel_analysis (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            hotel_db_id  INTEGER UNIQUE NOT NULL,
+            amap_rating  REAL,
+            amap_reviews INTEGER DEFAULT 0,
+            ctrip_raw    TEXT DEFAULT '',   -- 原始评论文本（JSON数组）
+            summary      TEXT DEFAULT '',   -- DeepSeek分析结果（JSON）
+            analyzed_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS route_cache (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             cache_key   TEXT UNIQUE NOT NULL,
@@ -190,13 +199,14 @@ def set_user_city(wecom_id: str, city: str):
 
 def save_hotel(user_id: int, name: str, source_url: str = "", hotel_id: str = "",
                lat: float = None, lng: float = None, rating: str = "", raw_text: str = "",
-               city: str = "", platform: str = ""):
+               city: str = "", platform: str = "") -> int:
     with get_db() as conn:
-        conn.execute("""
+        cur = conn.execute("""
             INSERT INTO hotels (user_id, name, city, source_url, hotel_id, lat, lng, rating, raw_text, platform)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (user_id, name, city, source_url, hotel_id, lat, lng, rating, raw_text, platform))
         conn.commit()
+        return cur.lastrowid
 
 def get_hotel_count(user_id: int) -> int:
     with get_db() as conn:
@@ -624,7 +634,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
             search_name = clean[:15] if len(clean) > 15 else clean
             city_for_geocode = ctrip["city"] or ""
             lat, lng = amap_geocode(search_name, city_for_geocode)
-            save_hotel(
+            new_hotel_id = save_hotel(
                 user_id=user["id"],
                 name=ctrip["name"],
                 city=ctrip["city"],
@@ -636,6 +646,12 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
                 platform=ctrip.get("platform", "")
             )
             set_user_city(user_id, ctrip["city"])
+            # 后台异步触发评价分析
+            threading.Thread(
+                target=run_hotel_analysis,
+                args=(new_hotel_id, ctrip["name"], ctrip.get("hotel_id", ""), ""),
+                daemon=True
+            ).start()
             hotel_count += 1
             loc_str = f"📍 已定位到地图" if lat else "（坐标定位失败，后续补）"
             platform_str = f" [{ctrip.get('platform', '')}]" if ctrip.get('platform') else ""
@@ -823,6 +839,149 @@ async def receive(request: Request, background_tasks: BackgroundTasks,
 
 # ── REST API ──────────────────────────────────────────────────────────────────
 
+# ── 酒店评价分析 ──────────────────────────────────────────────────────────────
+
+REVIEW_ANALYSIS_PROMPT = """你是专业的酒店点评分析师。分析以下携程酒店评论，提取所有可能影响住客体验的问题点。
+
+核心原则：
+1. 即使只有1-2条差评提到某个问题，也必须列出（标注"个别提到"）——用户需要完整信息做决策
+2. 不要因为整体评分高就淡化或忽略具体问题
+3. 着重关注：隔音/噪音、卫生/清洁度、热水稳定性、停车便利、电梯等候、WiFi质量、
+   房间气味、设施老旧程度、服务态度、早餐质量、位置/交通、空调效果、床品舒适度、
+   装修风格与图片是否相符、周边环境
+
+返回JSON格式（只返回JSON，不要其他内容）：
+{
+  "highlights": ["优点1", "优点2"],
+  "warnings": [
+    {
+      "issue": "问题简述（如：隔音差）",
+      "severity": "高|中|低",
+      "frequency": "多人提到|个别提到",
+      "detail": "具体描述，引用原评论关键词"
+    }
+  ],
+  "verdict": "一句话总结，含最需注意的避雷点"
+}"""
+
+def fetch_amap_hotel_rating(amap_poi_id: str) -> tuple[float | None, int]:
+    """从高德获取酒店评分和评论数"""
+    if not amap_poi_id:
+        return None, 0
+    try:
+        r = requests.get("https://restapi.amap.com/v3/place/detail", params={
+            "key": AMAP_WEB_KEY, "id": amap_poi_id, "output": "json",
+        }, timeout=6).json()
+        pois = r.get("pois", [])
+        if pois:
+            p = pois[0]
+            rating = float(p.get("biz_ext", {}).get("rating") or 0) or None
+            comment_num = int(p.get("biz_ext", {}).get("comment_num") or 0)
+            return rating, comment_num
+    except Exception as e:
+        print("amap_rating error:", e)
+    return None, 0
+
+def fetch_ctrip_reviews(hotel_id: str, max_reviews: int = 30) -> list[str]:
+    """抓取携程手机端评论，返回评论文本列表"""
+    if not hotel_id:
+        return []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Content-Type": "application/json",
+        "Referer": f"https://m.ctrip.com/webapp/hotel/{hotel_id}",
+        "Origin": "https://m.ctrip.com",
+    }
+    reviews = []
+    # 策略1：JSON API（优先尝试）
+    for page in range(1, 3):  # 拉2页，约60条
+        try:
+            r = requests.post(
+                "https://m.ctrip.com/restapi/soa2/13444/json/getHotelCommentList",
+                headers=headers,
+                json={
+                    "hotelId": int(hotel_id),
+                    "pageIndex": page,
+                    "pageSize": max_reviews // 2,
+                    "sortType": 1,          # 1=最新 2=最热
+                    "filterType": 0,
+                    "head": {"cid": "09031014111144141", "ctok": "", "cver": "1.0",
+                             "lang": "01", "sid": "8888", "syscode": "09"},
+                },
+                timeout=10
+            ).json()
+            items = (r.get("result") or {}).get("hotelCommentList") or []
+            for item in items:
+                content = item.get("content") or item.get("commentContent") or ""
+                if content and len(content) > 10:
+                    reviews.append(content)
+            if items:
+                break  # 第一策略成功，不用试备用
+        except Exception as e:
+            print(f"ctrip_api page{page} error:", e)
+
+    # 策略2：移动端网页解析（fallback）
+    if not reviews:
+        try:
+            resp = requests.get(
+                f"https://m.ctrip.com/webapp/hotel/{hotel_id}",
+                headers=headers, timeout=10
+            )
+            # 从 HTML 中正则提取评论文本
+            texts = re.findall(r'"content"\s*:\s*"([^"]{20,500})"', resp.text)
+            reviews = list(dict.fromkeys(texts))[:max_reviews]  # 去重
+        except Exception as e:
+            print("ctrip_html error:", e)
+
+    print(f"ctrip reviews fetched: {len(reviews)} for hotel_id={hotel_id}")
+    return reviews[:max_reviews]
+
+def analyze_hotel_reviews(reviews: list[str], hotel_name: str) -> dict | None:
+    """用 DeepSeek 分析评论，提炼避雷要点"""
+    if not DEEPSEEK_KEY or not reviews:
+        return None
+    # 截取前4000字符避免超token
+    combined = f"酒店：{hotel_name}\n\n评论：\n" + "\n---\n".join(reviews)
+    combined = combined[:4000]
+    try:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+            json={"model": "deepseek-chat", "max_tokens": 800,
+                  "messages": [{"role": "system", "content": REVIEW_ANALYSIS_PROMPT},
+                                {"role": "user",   "content": combined}]},
+            timeout=20
+        ).json()
+        content = r["choices"][0]["message"]["content"].strip()
+        content = re.sub(r'^```[a-z]*\n?|\n?```$', '', content).strip()
+        return json.loads(content)
+    except Exception as e:
+        print("analyze_hotel_reviews error:", e)
+    return None
+
+def run_hotel_analysis(hotel_db_id: int, hotel_name: str, hotel_id: str, amap_poi_id: str):
+    """后台异步：拉评分+评论+分析，结果写入 hotel_analysis 表"""
+    print(f"[analysis] start: {hotel_name} ctrip={hotel_id} amap={amap_poi_id}")
+    amap_rating, amap_count = fetch_amap_hotel_rating(amap_poi_id)
+    reviews = fetch_ctrip_reviews(hotel_id)
+    summary = analyze_hotel_reviews(reviews, hotel_name)
+    with get_db() as conn:
+        conn.execute("""
+            INSERT OR REPLACE INTO hotel_analysis
+              (hotel_db_id, amap_rating, amap_reviews, ctrip_raw, summary, analyzed_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (
+            hotel_db_id,
+            amap_rating,
+            amap_count,
+            json.dumps(reviews[:10], ensure_ascii=False),  # 只存前10条作为参考
+            json.dumps(summary, ensure_ascii=False) if summary else "",
+        ))
+        conn.commit()
+    print(f"[analysis] done: {hotel_name}, rating={amap_rating}, reviews={len(reviews)}")
+
 # ── 真实路线时间（高德 + SQLite 缓存）────────────────────────────────────────
 
 CACHE_TTL_HOURS = 24
@@ -1008,7 +1167,30 @@ async def add_user_hotel(body: dict):
              "", h.get("amap_id", ""), "", "", "前端搜索")
         )
         conn.commit()
-        return {"ok": True, "id": cur.lastrowid}
+        new_id = cur.lastrowid
+        # 后台分析（高德 amap_id 作为 poi_id）
+        threading.Thread(
+            target=run_hotel_analysis,
+            args=(new_id, h["name"], "", h.get("amap_id", "")),
+            daemon=True
+        ).start()
+        return {"ok": True, "id": new_id}
+
+@app.get("/api/hotel/analysis")
+async def hotel_analysis(hotel_id: int):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM hotel_analysis WHERE hotel_db_id=?", (hotel_id,)
+        ).fetchone()
+    if not row:
+        return {"status": "pending"}
+    summary = json.loads(row["summary"]) if row["summary"] else None
+    return {
+        "status": "done",
+        "amap_rating": row["amap_rating"],
+        "amap_reviews": row["amap_reviews"],
+        "summary": summary,
+    }
 
 @app.delete("/api/user/hotel/{hotel_id}")
 async def delete_user_hotel(hotel_id: int, wecom_id: str):
