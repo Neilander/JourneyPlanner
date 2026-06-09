@@ -68,7 +68,11 @@ export default function Home() {
   const [showSearch, setShowSearch] = useState(false)
   const [showCityPicker, setShowCityPicker] = useState(false)
   const [showHotelManager, setShowHotelManager] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [cityInput, setCityInput] = useState('')
+  const [commuteMode, setCommuteMode] = useState<'transit' | 'driving' | 'walking'>('transit')
+  const [commuteMatrix, setCommuteMatrix] = useState<Record<string, Record<string, number>>>({})
+  const [matrixLoading, setMatrixLoading] = useState(false)
 
   // 从URL ?uid= 加载Bot收录的酒店、城市、已选景点
   useEffect(() => {
@@ -198,6 +202,23 @@ export default function Home() {
     }
   }
 
+  const fetchCommuteMatrix = async (
+    hs: Hotel[], ats: Attraction[], mode: string, city: string
+  ) => {
+    const selectedAts = ats.filter(a => selected.has(a.id))
+    if (hs.length === 0 || selectedAts.length === 0) return
+    setMatrixLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/commute/matrix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hotels: hs, attractions: selectedAts, mode, city }),
+      }).then(r => r.json())
+      setCommuteMatrix(res.matrix || {})
+    } catch {}
+    setMatrixLoading(false)
+  }
+
   const handleSearch = async () => {
     if (!searchKeyword.trim()) return
     setSearching(true)
@@ -243,16 +264,28 @@ export default function Home() {
   const ranking = useMemo(() => {
     if (hotels.length === 0 || selected.size === 0) return []
     const targets = attractions.filter(a => selected.has(a.id))
+    const hasMatrix = Object.keys(commuteMatrix).length > 0
     return hotels
       .map(h => {
-        const times = targets.map(a => toMinutes(distanceKm(h.lat, h.lng, a.lat, a.lng)))
+        const times = targets.map(a => {
+          if (hasMatrix && commuteMatrix[h.id]?.[a.id] != null)
+            return commuteMatrix[h.id][a.id]
+          return toMinutes(distanceKm(h.lat, h.lng, a.lat, a.lng))
+        })
         const avg = Math.round(times.reduce((s, t) => s + t, 0) / times.length)
         return { hotel: h, avg, times, targets }
       })
       .sort((a, b) => a.avg - b.avg)
-  }, [hotels, selected])
+  }, [hotels, selected, commuteMatrix])
 
   const selectedAttractions = attractions.filter(a => selected.has(a.id))
+
+  // 选中景点或通勤模式变化时重新拉取真实路线
+  useEffect(() => {
+    if (selected.size > 0 && hotels.length > 0) {
+      fetchCommuteMatrix(hotels, attractions, commuteMode, cityName)
+    }
+  }, [selected, commuteMode, hotels])
 
   const CITIES = [
     '北京','上海','广州','深圳','成都','杭州','西安','重庆','南京','武汉',
@@ -336,6 +369,11 @@ export default function Home() {
               className={`px-3 py-1 rounded-full transition-colors ${tab === 'rank' ? 'bg-white text-gray-900 font-medium' : 'text-gray-400'}`}
             >排行榜</button>
           </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="text-sm bg-gray-700 px-3 py-1 rounded-full"
+            title="通勤偏好"
+          >⚙</button>
           {hotels.length > 0 && (
             <button
               onClick={() => setShowHotelManager(true)}
@@ -388,6 +426,41 @@ export default function Home() {
         </div>
       )}
 
+      {/* Commute settings panel */}
+      {showSettings && (
+        <div className="absolute inset-0 bg-black/60 z-50 flex flex-col justify-end">
+          <div className="bg-white rounded-t-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <span className="font-bold text-base">通勤偏好</span>
+              <button onClick={() => setShowSettings(false)} className="text-gray-400 text-sm">完成</button>
+            </div>
+            <div className="space-y-3">
+              {([
+                { mode: 'transit', icon: '🚇', label: '公共交通优先', desc: '地铁+公交，贴近本地生活' },
+                { mode: 'driving', icon: '🚗', label: '最快速度优先', desc: '驾车，不限交通工具' },
+                { mode: 'walking', icon: '🚶', label: '步行', desc: '适合景区密集、步行可达场景' },
+              ] as const).map(({ mode, icon, label, desc }) => (
+                <button
+                  key={mode}
+                  onClick={() => { setCommuteMode(mode); setCommuteMatrix({}) }}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${
+                    commuteMode === mode ? 'border-orange-500 bg-orange-50' : 'border-gray-100'
+                  }`}
+                >
+                  <span className="text-2xl">{icon}</span>
+                  <div className="text-left">
+                    <div className="font-medium text-sm text-gray-900">{label}</div>
+                    <div className="text-xs text-gray-400">{desc}</div>
+                  </div>
+                  {commuteMode === mode && <span className="ml-auto text-orange-500 text-lg">✓</span>}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-3 text-center">切换后将重新计算真实路线时间</p>
+          </div>
+        </div>
+      )}
+
       {/* Hotel manager modal */}
       {showHotelManager && (
         <div className="absolute inset-0 bg-black/60 z-50 flex flex-col">
@@ -436,8 +509,17 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <p className="text-gray-400 text-xs mb-3">
-                按平均步行距离排序（直线估算）· 已选 {selected.size} 个景点
+              <p className="text-gray-400 text-xs mb-3 flex items-center gap-1">
+                {matrixLoading
+                  ? <span className="text-orange-400 animate-pulse">⏳ 正在计算真实路线...</span>
+                  : <>
+                      {Object.keys(commuteMatrix).length > 0
+                        ? { transit: '🚇 公共交通', driving: '🚗 驾车', walking: '🚶 步行' }[commuteMode]
+                        : '📐 直线估算（选景点后自动更新）'
+                      }
+                      · 已选 {selected.size} 个景点
+                    </>
+                }
               </p>
               {ranking.map((item, i) => (
                 <div key={item.hotel.id} className="bg-gray-800 rounded-xl p-4 mb-3">

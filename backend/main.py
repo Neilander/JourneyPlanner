@@ -60,6 +60,13 @@ def init_db():
             msgid TEXT PRIMARY KEY,
             ts    DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS route_cache (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            cache_key   TEXT UNIQUE NOT NULL,
+            minutes     REAL NOT NULL,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_route_cache ON route_cache(cache_key);
         CREATE TABLE IF NOT EXISTS usage_log (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             wecom_id  TEXT NOT NULL,
@@ -815,6 +822,134 @@ async def receive(request: Request, background_tasks: BackgroundTasks,
     return Response(content="success")
 
 # ── REST API ──────────────────────────────────────────────────────────────────
+
+# ── 真实路线时间（高德 + SQLite 缓存）────────────────────────────────────────
+
+CACHE_TTL_HOURS = 24
+
+def _route_cache_key(olat, olng, dlat, dlng, mode: str) -> str:
+    # 坐标精度保留4位，避免微小差异导致缓存miss
+    return f"{round(olat,4)},{round(olng,4)}-{round(dlat,4)},{round(dlng,4)}-{mode}"
+
+def _get_cached(key: str) -> float | None:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT minutes FROM route_cache WHERE cache_key=? AND created_at > datetime('now', ?)",
+            (key, f"-{CACHE_TTL_HOURS} hours")
+        ).fetchone()
+    return row[0] if row else None
+
+def _set_cached(key: str, minutes: float):
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO route_cache (cache_key, minutes) VALUES (?, ?)",
+            (key, minutes)
+        )
+        conn.commit()
+
+def amap_transit_minutes(olat, olng, dlat, dlng, city: str) -> float | None:
+    """高德公共交通路线，返回分钟数"""
+    try:
+        r = requests.get("https://restapi.amap.com/v3/direction/transit/integrated", params={
+            "key": AMAP_WEB_KEY,
+            "origin": f"{olng},{olat}",
+            "destination": f"{dlng},{dlat}",
+            "city": city, "cityd": city,
+            "strategy": 0,  # 最快
+            "output": "json",
+        }, timeout=8).json()
+        plans = r.get("route", {}).get("transits", [])
+        if plans:
+            return round(int(plans[0].get("duration", 0)) / 60, 1)
+    except Exception as e:
+        print("amap_transit error:", e)
+    return None
+
+def amap_driving_minutes(olat, olng, dlat, dlng) -> float | None:
+    """高德驾车路线，返回分钟数"""
+    try:
+        r = requests.get("https://restapi.amap.com/v3/direction/driving", params={
+            "key": AMAP_WEB_KEY,
+            "origin": f"{olng},{olat}",
+            "destination": f"{dlng},{dlat}",
+            "strategy": 10,  # 不走高速
+            "output": "json",
+        }, timeout=8).json()
+        paths = r.get("route", {}).get("paths", [])
+        if paths:
+            return round(int(paths[0].get("duration", 0)) / 60, 1)
+    except Exception as e:
+        print("amap_driving error:", e)
+    return None
+
+def amap_walking_minutes(olat, olng, dlat, dlng) -> float | None:
+    """高德步行，返回分钟数"""
+    try:
+        r = requests.get("https://restapi.amap.com/v3/direction/walking", params={
+            "key": AMAP_WEB_KEY,
+            "origin": f"{olng},{olat}",
+            "destination": f"{dlng},{dlat}",
+            "output": "json",
+        }, timeout=8).json()
+        paths = r.get("route", {}).get("paths", [])
+        if paths:
+            return round(int(paths[0].get("duration", 0)) / 60, 1)
+    except Exception as e:
+        print("amap_walking error:", e)
+    return None
+
+def get_route_minutes(olat, olng, dlat, dlng, mode: str, city: str = "") -> float:
+    """获取两点间通勤时间（分钟），优先读缓存"""
+    key = _route_cache_key(olat, olng, dlat, dlng, mode)
+    cached = _get_cached(key)
+    if cached is not None:
+        return cached
+
+    minutes = None
+    if mode == "transit":
+        minutes = amap_transit_minutes(olat, olng, dlat, dlng, city)
+    elif mode == "driving":
+        minutes = amap_driving_minutes(olat, olng, dlat, dlng)
+    elif mode == "walking":
+        minutes = amap_walking_minutes(olat, olng, dlat, dlng)
+
+    if minutes is None:
+        # fallback: 直线距离估算
+        from math import radians, sin, cos, atan2, sqrt
+        R = 6371
+        dlat_r = radians(dlat - olat)
+        dlng_r = radians(dlng - olng)
+        a = sin(dlat_r/2)**2 + cos(radians(olat))*cos(radians(dlat))*sin(dlng_r/2)**2
+        km = R * 2 * atan2(sqrt(a), sqrt(1-a))
+        speed = {"transit": 20, "driving": 30, "walking": 5}.get(mode, 20)
+        minutes = round(km / speed * 60, 1)
+
+    _set_cached(key, minutes)
+    return minutes
+
+@app.post("/api/commute/matrix")
+async def commute_matrix(body: dict):
+    """
+    计算酒店×景点通勤矩阵
+    body: {
+      hotels: [{id, name, lat, lng}],
+      attractions: [{id, name, lat, lng}],
+      mode: "transit" | "driving" | "walking",
+      city: "北京"
+    }
+    返回: {matrix: {hotel_id: {attraction_id: minutes}}}
+    """
+    hotels = body.get("hotels", [])
+    attractions = body.get("attractions", [])
+    mode = body.get("mode", "transit")
+    city = body.get("city", "")
+    matrix: dict = {}
+    for h in hotels:
+        matrix[h["id"]] = {}
+        for a in attractions:
+            m = get_route_minutes(h["lat"], h["lng"], a["lat"], a["lng"], mode, city)
+            matrix[h["id"]][a["id"]] = m
+    return {"matrix": matrix}
 
 @app.get("/api/poi/search")
 async def poi_search(keyword: str, city: str = "西安"):
