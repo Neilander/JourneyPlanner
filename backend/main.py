@@ -1093,6 +1093,99 @@ def fetch_ctrip_reviews(hotel_id: str, max_reviews: int = 30) -> list[str]:
     print(f"ctrip reviews fetched: {len(reviews)} for hotel_id={hotel_id}")
     return reviews[:max_reviews]
 
+# 大众点评城市 ID 映射（主要城市）
+DIANPING_CITY_IDS = {
+    "北京": 2, "上海": 1, "广州": 4, "深圳": 7, "成都": 8, "杭州": 10,
+    "武汉": 11, "南京": 9, "西安": 23, "重庆": 6, "苏州": 15, "天津": 3,
+    "长沙": 12, "郑州": 17, "青岛": 20, "厦门": 5, "昆明": 24, "大连": 22,
+    "宁波": 16, "沈阳": 21, "哈尔滨": 25, "福州": 18, "济南": 19, "合肥": 26,
+}
+
+def search_dianping_shop_id(hotel_name: str, city: str = "西安") -> str:
+    """在大众点评搜索酒店，返回 shop_id"""
+    city_id = DIANPING_CITY_IDS.get(city, 23)  # 默认西安
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Referer": "https://m.dianping.com/",
+    }
+    try:
+        resp = requests.get(
+            f"https://m.dianping.com/search/searchlist?cityId={city_id}&keyword={requests.utils.quote(hotel_name)}&type=0",
+            headers=headers, timeout=10
+        )
+        # 从 HTML 中提取第一个酒店 shop id
+        shop_ids = re.findall(r'/shop/(\d{8,12})', resp.text)
+        if shop_ids:
+            sid = shop_ids[0]
+            print(f"[dianping_search] found shop for '{hotel_name}': {sid}")
+            return sid
+        # 备用：从 JSON 数据岛提取
+        ids = re.findall(r'"shopId"\s*:\s*"?(\d{8,12})"?', resp.text)
+        if ids:
+            print(f"[dianping_search] found shop (json) for '{hotel_name}': {ids[0]}")
+            return ids[0]
+    except Exception as e:
+        print(f"dianping_search error: {e}")
+    return ""
+
+def fetch_dianping_reviews(hotel_name: str, city: str = "西安", max_reviews: int = 30) -> list[str]:
+    """抓取大众点评评论"""
+    shop_id = search_dianping_shop_id(hotel_name, city)
+    if not shop_id:
+        print(f"dianping: no shop_id found for '{hotel_name}'")
+        return []
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Referer": f"https://m.dianping.com/shop/{shop_id}",
+    }
+    reviews = []
+    try:
+        # 差评优先（sortType=2 最新，type=6 差评/中评）
+        for sort in [2, 1]:  # 2=最新，1=热门
+            resp = requests.get(
+                f"https://m.dianping.com/shop/{shop_id}/review_all/p1?sortType={sort}",
+                headers=headers, timeout=10
+            )
+            raw = resp.text
+
+            # 提取评论文本（大众点评 H5 的结构）
+            # 评论在 <p class="...desc..."> 或 data-content 里
+            texts = re.findall(r'data-content="([^"]{15,500})"', raw)
+            if not texts:
+                texts = re.findall(r'<p[^>]*class="[^"]*review[^"]*"[^>]*>([^<]{15,500})</p>', raw, re.DOTALL)
+            if not texts:
+                # 尝试 JSON 数据岛
+                texts = re.findall(r'"content"\s*:\s*"([^"]{15,500})"', raw)
+            if not texts:
+                # 尝试 reviewText 字段
+                texts = re.findall(r'"reviewText"\s*:\s*"([^"]{15,500})"', raw)
+
+            texts = [t.replace('\\n', ' ').replace('\\"', '"').strip() for t in texts]
+            texts = [t for t in texts if len(t) > 15]
+            reviews.extend(texts)
+            if reviews:
+                break  # 拿到评论就不用试下一个排序了
+
+    except Exception as e:
+        print(f"dianping_reviews error: {e}")
+
+    # 去重
+    seen = set()
+    deduped = []
+    for r in reviews:
+        key = r[:40]
+        if key not in seen:
+            seen.add(key)
+            deduped.append(r)
+
+    print(f"dianping reviews fetched: {len(deduped)} for shop_id={shop_id}")
+    return deduped[:max_reviews]
+
 def analyze_hotel_reviews(reviews: list[str], hotel_name: str) -> dict | None:
     """用 DeepSeek 分析评论，提炼避雷要点"""
     if not DEEPSEEK_KEY or not reviews:
@@ -1138,18 +1231,17 @@ def run_hotel_analysis(hotel_db_id: int, hotel_name: str, hotel_id: str, amap_po
         hotel_id = search_ctrip_hotel_id(hotel_name, city)
 
     amap_rating, amap_count = fetch_amap_hotel_rating(amap_poi_id)
-    # 高德评论 + 携程评论合并（高德更稳定，携程内容更丰富）
-    amap_reviews_list = fetch_amap_reviews(amap_poi_id)
-    ctrip_reviews_list = fetch_ctrip_reviews(hotel_id)
-    # 去重合并，高德优先放前面
+    # 多源评论合并：大众点评（主力）+ 携程（补充）
+    dp_reviews   = fetch_dianping_reviews(hotel_name, city)
+    ctrip_reviews = fetch_ctrip_reviews(hotel_id)
     seen = set()
     reviews = []
-    for r in amap_reviews_list + ctrip_reviews_list:
+    for r in dp_reviews + ctrip_reviews:
         key = r[:50]
         if key not in seen:
             seen.add(key)
             reviews.append(r)
-    print(f"[analysis] total reviews: {len(reviews)} (amap={len(amap_reviews_list)}, ctrip={len(ctrip_reviews_list)})")
+    print(f"[analysis] total reviews: {len(reviews)} (dianping={len(dp_reviews)}, ctrip={len(ctrip_reviews)})")
 
     if reviews:
         # 有真实评论 → 用评论分析
