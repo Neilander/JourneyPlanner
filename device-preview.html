@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JourneyPlanner · 多设备首屏预览</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#141a26; --line:#222b3a; --text:#e7ecf3; --muted:#8b97a8;
+    --orange:#f97316; --chip:#1c2433;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);}
+  /* 顶栏 */
+  header{position:sticky;top:0;z-index:10;background:rgba(11,15,23,.85);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);padding:12px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:15px;font-weight:700;white-space:nowrap}
+  header h1 span{color:var(--orange)}
+  .urlbar{flex:1;min-width:260px;display:flex;gap:8px;align-items:center}
+  .urlbar input{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:8px 12px;border-radius:9px;font-size:13px;outline:none}
+  .urlbar input:focus{border-color:var(--orange)}
+  .btn{background:var(--orange);color:#fff;border:none;padding:8px 14px;border-radius:9px;font-size:13px;
+    font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn.ghost{background:var(--chip);color:var(--text);border:1px solid var(--line)}
+  .quick{display:flex;gap:6px;flex-wrap:wrap}
+  .quick button{background:var(--chip);border:1px solid var(--line);color:var(--muted);font-size:12px;
+    padding:6px 10px;border-radius:20px;cursor:pointer}
+  .quick button:hover{border-color:var(--orange);color:var(--text)}
+  .zoom{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  .zoom input{accent-color:var(--orange)}
+
+  /* 画廊 */
+  .gallery{display:flex;flex-wrap:wrap;gap:34px 28px;padding:30px;align-items:flex-start;justify-content:center}
+  .device{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .label{font-size:12.5px;color:var(--muted);text-align:center;line-height:1.4}
+  .label b{color:var(--text);font-size:13px;display:block}
+  .label .res{font-size:11px;color:#5f6b7d}
+
+  /* 设备外框 */
+  .frame{position:relative;background:#0d1320;border:2px solid #2a3446;box-shadow:0 18px 50px rgba(0,0,0,.5);overflow:hidden}
+  .frame.phone{border-radius:30px;padding:9px;border-width:8px;border-color:#10151f}
+  .frame.tablet{border-radius:20px;padding:8px;border-width:10px;border-color:#10151f}
+  .frame.desktop{border-radius:12px 12px 0 0;padding:0;border-width:1px;border-color:#2a3446}
+  .frame.desktop .bar{height:26px;background:#161d2a;display:flex;align-items:center;gap:6px;padding:0 12px}
+  .frame.desktop .bar i{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .frame.phone .notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:40%;height:20px;
+    background:#10151f;border-radius:0 0 12px 12px;z-index:5}
+  iframe{border:none;background:#111;display:block}
+  .scaleWrap{position:relative;overflow:hidden;border-radius:14px}
+  .hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--panel);
+    border:1px solid var(--line);color:var(--muted);font-size:12px;padding:8px 14px;border-radius:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Journey<span>Planner</span> · 多设备首屏预览</h1>
+  <div class="urlbar">
+    <input id="url" value="https://trip.neiland.xyz/" spellcheck="false">
+    <button class="btn" onclick="applyUrl()">刷新全部</button>
+  </div>
+  <div class="quick">
+    <button onclick="setUrl('https://trip.neiland.xyz/')">默认（西安）</button>
+    <button onclick="setUrl('https://trip.neiland.xyz/?uid=demo')">?uid=demo</button>
+  </div>
+  <label class="zoom">缩放 <input id="zoom" type="range" min="40" max="100" value="70" oninput="setZoom(this.value)"><span id="zlbl">70%</span></label>
+</header>
+
+<div class="gallery" id="gallery"></div>
+<div class="hint">嵌入的是线上真实页面 · 各 iframe 按设备逻辑分辨率渲染，媒体查询/断点表现与真机一致</div>
+
+<script>
+  // 设备列表：逻辑分辨率（CSS px），决定 app 的响应式断点表现
+  const DEVICES = [
+    { name:'iPhone SE',      type:'phone',   w:375,  h:667,  notch:false },
+    { name:'iPhone 14',      type:'phone',   w:390,  h:844,  notch:true  },
+    { name:'Pixel 7',        type:'phone',   w:412,  h:915,  notch:false },
+    { name:'iPad mini',      type:'tablet',  w:768,  h:1024, notch:false },
+    { name:'iPad Pro 11"',   type:'tablet',  w:834,  h:1194, notch:false },
+    { name:'笔记本 Laptop',   type:'desktop', w:1280, h:800,  notch:false },
+  ];
+
+  let baseUrl = document.getElementById('url').value;
+  let zoom = 0.7;
+
+  function frameScale(d){
+    // 不同类别用不同基础缩放，保证手机看得清、平板/桌面不过大
+    const base = d.type==='phone' ? 1 : d.type==='tablet' ? 0.62 : 0.46;
+    return base * zoom;
+  }
+
+  function render(){
+    const g = document.getElementById('gallery');
+    g.innerHTML = '';
+    DEVICES.forEach((d, i) => {
+      const s = frameScale(d);
+      const dispW = Math.round(d.w * s);
+      const dispH = Math.round(d.h * s);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'device';
+
+      const bar = d.type==='desktop'
+        ? `<div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>` : '';
+      const notch = (d.type==='phone' && d.notch) ? `<div class="notch"></div>` : '';
+
+      // iframe 用真实逻辑分辨率，再用 transform:scale 缩小显示
+      const innerH = d.type==='desktop' ? d.h-26 : d.h;
+      wrap.innerHTML = `
+        <div class="frame ${d.type}" style="width:${dispW + (d.type==='phone'?16:d.type==='tablet'?20:2)}px">
+          ${notch}${bar}
+          <div class="scaleWrap" style="width:${dispW}px;height:${Math.round(innerH*s)}px">
+            <iframe loading="lazy" src="${baseUrl}"
+              style="width:${d.w}px;height:${innerH}px;transform:scale(${s});transform-origin:top left"></iframe>
+          </div>
+        </div>
+        <div class="label"><b>${d.name}</b><span class="res">${d.w} × ${d.h}</span></div>`;
+      g.appendChild(wrap);
+    });
+  }
+
+  function applyUrl(){ baseUrl = document.getElementById('url').value; render(); }
+  function setUrl(u){ document.getElementById('url').value = u; applyUrl(); }
+  function setZoom(v){ zoom = v/100; document.getElementById('zlbl').textContent = v+'%'; render(); }
+
+  render();
+</script>
+</body>
+</html>

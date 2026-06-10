@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JourneyPlanner · 睡莲池概念稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..600&family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;700;900&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --dark:#0A3323;      /* dark green   */
+    --moss:#839958;      /* moss green   */
+    --beige:#F7F4D5;     /* beige cream  */
+    --rosy:#D3968C;      /* rosy brown   */
+    --mid:#105666;       /* midnight green */
+    --ink:#0A3323;
+    --paper:#F7F4D5;
+    --serif:"Fraunces","Noto Serif SC",serif;
+    --sans:"Hanken Grotesk","Noto Sans SC",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);background:var(--paper);color:var(--ink);
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.5;
+  }
+
+  /* ---------- 池水氛围背景 ---------- */
+  .atmos{position:fixed;inset:0;z-index:-2;
+    background:
+      radial-gradient(60% 50% at 18% 8%, rgba(131,153,88,.40), transparent 70%),
+      radial-gradient(55% 45% at 88% 22%, rgba(16,86,102,.38), transparent 72%),
+      radial-gradient(50% 50% at 75% 92%, rgba(211,150,140,.34), transparent 70%),
+      radial-gradient(70% 60% at 30% 95%, rgba(10,51,35,.30), transparent 75%),
+      var(--paper);
+  }
+  /* 颗粒噪点 */
+  .grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+
+  /* ---------- 顶栏 ---------- */
+  nav{display:flex;align-items:center;justify-content:space-between;padding:26px 28px;max-width:1080px;margin:0 auto}
+  .logo{font-family:var(--serif);font-weight:600;font-size:21px;letter-spacing:-.01em;color:var(--dark)}
+  .logo i{font-style:italic;color:var(--mid)}
+  .navlinks{display:flex;gap:26px;font-size:14px;font-weight:500;color:var(--dark)}
+  .navlinks a{color:inherit;text-decoration:none;opacity:.7;transition:opacity .2s}
+  .navlinks a:hover{opacity:1}
+  .pill{background:var(--dark);color:var(--beige);padding:9px 18px;border-radius:30px;font-size:13.5px;font-weight:600}
+
+  /* ---------- HERO ---------- */
+  header{padding:46px 0 30px}
+  .kicker{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--mid);margin-bottom:26px}
+  .kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--rosy);box-shadow:0 0 0 4px rgba(211,150,140,.25)}
+  h1{font-family:var(--serif);font-weight:300;font-size:clamp(44px,8.2vw,92px);line-height:.98;
+    letter-spacing:-.025em;color:var(--dark);max-width:14ch}
+  h1 em{font-style:italic;font-weight:500;color:var(--mid)}
+  h1 .mark{position:relative;white-space:nowrap;color:var(--dark)}
+  h1 .mark::after{content:"";position:absolute;left:-2%;right:-2%;bottom:.08em;height:.30em;z-index:-1;
+    background:var(--rosy);opacity:.55;border-radius:3px;transform:rotate(-1.2deg)}
+  .lede{margin-top:30px;font-size:clamp(16px,2vw,19px);max-width:46ch;color:#23402f;font-weight:400}
+  .lede b{color:var(--dark);font-weight:600}
+  .cta{margin-top:38px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .btn{font-weight:600;font-size:15px;padding:14px 26px;border-radius:32px;border:none;cursor:pointer;text-decoration:none;display:inline-block}
+  .btn.solid{background:var(--dark);color:var(--beige)}
+  .btn.solid:hover{background:var(--mid)}
+  .btn.ghost{background:transparent;color:var(--dark);border:1.5px solid rgba(10,51,35,.25)}
+  .btn.ghost:hover{border-color:var(--dark)}
+
+  /* ---------- 地图概念卡 ---------- */
+  .stage{margin:60px 0 30px;position:relative}
+  .mapcard{position:relative;border-radius:26px;overflow:hidden;border:1px solid rgba(10,51,35,.12);
+    background:linear-gradient(160deg,#0d3a28,#0A3323 60%,#082a1d);
+    box-shadow:0 40px 90px -30px rgba(10,51,35,.55);aspect-ratio:16/9;min-height:300px}
+  .mapcard .water{position:absolute;inset:0;opacity:.5;
+    background:
+      radial-gradient(40% 40% at 70% 30%, rgba(16,86,102,.7), transparent 70%),
+      radial-gradient(35% 35% at 25% 75%, rgba(131,153,88,.55), transparent 70%);}
+  .mapcard svg{position:absolute;inset:0;width:100%;height:100%}
+  .pin{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;transform:translate(-50%,-100%)}
+  .pin .bub{font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px;white-space:nowrap;
+    box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  .pin .stem{width:9px;height:9px;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .pin.best .bub{background:var(--rosy);color:#3a1d18}
+  .pin.best .stem{background:var(--rosy)}
+  .pin.h .bub{background:var(--beige);color:var(--dark)}
+  .pin.h .stem{background:var(--beige)}
+  .spot{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:5px}
+  .spot .ring{width:13px;height:13px;border-radius:50%;background:var(--moss);box-shadow:0 0 0 4px rgba(131,153,88,.3)}
+  .spot .nm{font-size:11px;color:#dfe7cf;font-weight:500}
+  .badge{position:absolute;left:22px;bottom:20px;background:rgba(247,244,213,.92);color:var(--dark);
+    padding:13px 17px;border-radius:16px;backdrop-filter:blur(6px);box-shadow:0 12px 30px rgba(0,0,0,.25)}
+  .badge .t{font-family:var(--serif);font-weight:600;font-size:15px}
+  .badge .s{font-size:12px;color:#3a5345;margin-top:2px}
+  .badge .v{font-family:var(--serif);font-style:italic;font-size:26px;color:var(--mid);font-weight:500;margin-top:6px}
+
+  /* ---------- 三大优势 ---------- */
+  .feats{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:54px 0}
+  .feat{background:rgba(255,255,255,.45);border:1px solid rgba(10,51,35,.10);border-radius:20px;padding:26px 22px;
+    backdrop-filter:blur(4px);transition:transform .25s,box-shadow .25s}
+  .feat:hover{transform:translateY(-5px);box-shadow:0 26px 50px -24px rgba(10,51,35,.4)}
+  .feat .no{font-family:var(--serif);font-style:italic;font-size:34px;font-weight:500;line-height:1}
+  .feat:nth-child(1) .no{color:var(--mid)}
+  .feat:nth-child(2) .no{color:var(--moss)}
+  .feat:nth-child(3) .no{color:var(--rosy)}
+  .feat h3{font-family:var(--serif);font-weight:600;font-size:21px;margin:14px 0 9px;color:var(--dark);letter-spacing:-.01em}
+  .feat p{font-size:14px;color:#33493c;line-height:1.65}
+
+  /* ---------- 引述 ---------- */
+  .quote{text-align:center;padding:30px 0 8px;max-width:20ch;margin:0 auto}
+  .quote p{font-family:var(--serif);font-weight:300;font-size:clamp(26px,4.4vw,42px);line-height:1.15;
+    letter-spacing:-.02em;color:var(--dark)}
+  .quote em{font-style:italic;color:var(--rosy)}
+
+  /* ---------- 调色板致敬 ---------- */
+  .palette{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin:56px 0 0;border-radius:18px;overflow:hidden;
+    box-shadow:0 20px 50px -26px rgba(10,51,35,.5)}
+  .sw{padding:30px 16px 18px;min-height:130px;display:flex;flex-direction:column;justify-content:flex-end}
+  .sw .hex{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.04em;opacity:.8;margin-bottom:6px}
+  .sw .nm{font-family:var(--serif);font-weight:600;font-size:16px}
+
+  footer{text-align:center;padding:48px 0 40px;color:#3a5345;font-size:13px}
+  footer b{font-family:var(--serif);color:var(--dark)}
+
+  /* ---------- 入场动画 ---------- */
+  .rise{opacity:0;transform:translateY(22px);animation:rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .d1{animation-delay:.05s}.d2{animation-delay:.16s}.d3{animation-delay:.28s}
+  .d4{animation-delay:.4s}.d5{animation-delay:.54s}.d6{animation-delay:.68s}
+
+  @media(max-width:760px){
+    .navlinks{display:none}
+    .feats{grid-template-columns:1fr}
+    .palette{grid-template-columns:repeat(2,1fr)}
+    h1{font-size:clamp(40px,12vw,60px)}
+  }
+</style>
+</head>
+<body>
+<div class="atmos"></div>
+<div class="grain"></div>
+
+<nav class="rise d1">
+  <div class="logo">Journey<i>Planner</i></div>
+  <div class="navlinks">
+    <a href="#">怎么用</a><a href="#">三大优势</a><a href="#">价格</a>
+  </div>
+  <span class="pill">微信里找我们</span>
+</nav>
+
+<header class="wrap">
+  <div class="kicker rise d2"><span class="dot"></span>省心 · 安心的智能旅程规划</div>
+  <h1 class="rise d2">把<span class="mark">住哪儿</span>，<br>变成<em>一眼就懂</em>的事。</h1>
+  <p class="lede rise d3">把心仪的房、想去的景点、各处通勤，<b>全摊在同一张地图上</b>——
+     哪间酒店离你要去的地方最顺，深浅一看便知。不再开十几个 App 来回比。</p>
+  <div class="cta rise d3">
+    <a class="btn solid" href="#">开始规划</a>
+    <a class="btn ghost" href="#">看一个示例 →</a>
+  </div>
+</header>
+
+<section class="wrap stage rise d4">
+  <div class="mapcard">
+    <div class="water"></div>
+    <svg viewBox="0 0 1000 560" preserveAspectRatio="none">
+      <g stroke="#D3968C" stroke-width="2.5" fill="none" opacity="0.85" stroke-dasharray="2 7" stroke-linecap="round">
+        <path d="M300,300 C420,230 520,210 640,170"/>
+        <path d="M300,300 C400,360 520,400 600,430"/>
+        <path d="M300,300 C260,210 300,150 360,120"/>
+      </g>
+      <g stroke="#839958" stroke-width="2" fill="none" opacity="0.6" stroke-dasharray="2 7" stroke-linecap="round">
+        <path d="M740,360 C660,300 600,260 640,170"/>
+        <path d="M740,360 C700,420 660,430 600,430"/>
+      </g>
+    </svg>
+    <!-- 景点 -->
+    <div class="spot" style="left:64%;top:30%"><div class="ring"></div><div class="nm">钟楼</div></div>
+    <div class="spot" style="left:60%;top:77%"><div class="ring"></div><div class="nm">大唐不夜城</div></div>
+    <div class="spot" style="left:36%;top:21%"><div class="ring"></div><div class="nm">回民街</div></div>
+    <!-- 酒店 -->
+    <div class="pin best" style="left:30%;top:54%"><div class="bub">最顺 · 均 14 分钟</div><div class="stem"></div></div>
+    <div class="pin h" style="left:74%;top:64%"><div class="bub">候选 · 均 26 分钟</div><div class="stem"></div></div>
+    <div class="badge">
+      <div class="t">候选酒店 · 通勤排名</div>
+      <div class="s">到你选的 3 个景点 · 公共交通优先</div>
+      <div class="v">14 分钟 起</div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap feats">
+  <div class="feat rise d4">
+    <div class="no">01</div>
+    <h3>找房距离统筹</h3>
+    <p>看到中意的房就转发给我们。系统统筹每间候选房到你所选景点的距离，地图上深浅直观对比——选房不再赌运气。</p>
+  </div>
+  <div class="feat rise d5">
+    <div class="no">02</div>
+    <h3>多源信息汇总</h3>
+    <p>小红书、携程、去哪儿、美团……链接笔记一起丢过来，AI 整合成一份结构化清单。散落十几个平台的信息，一次理清。</p>
+  </div>
+  <div class="feat rise d6">
+    <div class="no">03</div>
+    <h3>AI 自动避雷</h3>
+    <p>AI 读完几百条评论，按卫生 / 隔音 / 设施 / 服务四维打分，提前点出潜在雷点。看不完的评论，它替你看。</p>
+  </div>
+</section>
+
+<section class="quote rise d4">
+  <p>把累活，<br>变成<em>一句话</em>的事。</p>
+</section>
+
+<section class="wrap">
+  <div class="palette rise d5">
+    <div class="sw" style="background:#0A3323;color:#F7F4D5"><div class="hex">#0A3323</div><div class="nm">Dark green</div></div>
+    <div class="sw" style="background:#839958;color:#0A3323"><div class="hex">#839958</div><div class="nm">Moss green</div></div>
+    <div class="sw" style="background:#F7F4D5;color:#0A3323"><div class="hex">#F7F4D5</div><div class="nm">Beige</div></div>
+    <div class="sw" style="background:#D3968C;color:#3a1d18"><div class="hex">#D3968C</div><div class="nm">Rosy brown</div></div>
+    <div class="sw" style="background:#105666;color:#F7F4D5"><div class="hex">#105666</div><div class="nm">Midnight green</div></div>
+  </div>
+</section>
+
+<footer>
+  <b>JourneyPlanner</b> · 睡莲池配色概念稿 · 仅供预览
+</footer>
+
+</body>
+</html>

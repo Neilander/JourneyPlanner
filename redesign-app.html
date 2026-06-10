@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JourneyPlanner · 界面重设计（水彩亮色）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Noto+Serif+SC:wght@500;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script>window._AMapSecurityConfig = { securityJsCode: '028c0157e51b8eacd67d72d15161b634' };</script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=f65273afda7993a2685b0337410b8777"></script>
+<style>
+  :root{
+    --sand:#e8dec3;     /* 暖米黄底 */
+    --paper:#f4eedb;    /* 更浅的纸面 */
+    --paper2:#fbf7ea;   /* 最浅卡面 */
+    --sage:#8aa564;     /* 柔草绿 · 主强调 */
+    --sageDk:#5f7e44;
+    --moss:#445b39;     /* 深苔绿 · 文字 */
+    --sky:#9fb6bf;      /* 灰蓝 */
+    --slate:#5d7a86;    /* 深灰蓝 */
+    --clay:#c0855a;     /* 暖陶土 · 跳色 */
+    --ink:#403a2a;      /* 暖深褐文字 */
+    --stone:#cdbf9d;    /* 石色描边 */
+    --serif:"Fraunces","Noto Serif SC",serif;
+    --sans:"Noto Sans SC","Hanken Grotesk",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  body{font-family:var(--sans);color:var(--ink);min-height:100vh;background:#e6dcc0;
+    background-image:
+      radial-gradient(55% 42% at 14% 6%, rgba(138,165,100,.40), transparent 70%),
+      radial-gradient(50% 42% at 90% 18%, rgba(159,182,191,.46), transparent 72%),
+      radial-gradient(60% 55% at 82% 100%, rgba(192,133,90,.26), transparent 70%);
+    background-attachment:fixed;}
+  .page{max-width:1000px;margin:0 auto;padding:34px 24px 60px}
+  .head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:26px}
+  .head h1{font-family:var(--serif);font-weight:500;font-size:30px;letter-spacing:-.02em;color:var(--moss)}
+  .head h1 i{font-style:italic;color:var(--clay)}
+  .head .tag{font-size:13px;color:#5c6a4c;font-weight:600}
+  .stage{display:flex;gap:46px;justify-content:center;flex-wrap:wrap;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:13px}
+  .col .cap{font-family:var(--serif);font-style:italic;font-size:15px;color:#5c6a4c}
+
+  /* 浅色手机外壳 */
+  .phone{width:346px;height:726px;border-radius:46px;background:#d8cba8;padding:12px;position:relative;
+    box-shadow:0 40px 80px -34px rgba(80,70,40,.5), inset 0 0 0 1.5px rgba(255,255,255,.5)}
+  .screen{width:100%;height:100%;border-radius:34px;overflow:hidden;position:relative;display:flex;flex-direction:column;background:var(--paper)}
+  .notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:116px;height:23px;background:#d8cba8;border-radius:0 0 15px 15px;z-index:40}
+
+  /* 顶栏（浅）*/
+  .topbar{background:var(--paper);padding:30px 13px 11px;display:flex;align-items:center;gap:7px;flex-shrink:0;z-index:20;border-bottom:1px solid rgba(64,58,42,.08)}
+  .city{display:flex;align-items:center;gap:5px;background:var(--sand);padding:7px 11px;border-radius:30px;border:1px solid rgba(64,58,42,.10)}
+  .city .nm{font-family:var(--serif);font-weight:600;font-size:14.5px;color:var(--moss)}
+  .city .sw{font-size:10px;color:var(--sageDk)}
+  .tabs{display:flex;background:var(--sand);border-radius:30px;padding:3px;margin-left:auto;border:1px solid rgba(64,58,42,.08)}
+  .tabs button{border:none;background:none;font-family:var(--sans);font-weight:700;font-size:12px;padding:6px 12px;border-radius:30px;color:#7a8466;cursor:pointer}
+  .tabs button.on{background:var(--sage);color:#fff}
+  .icon{width:30px;height:30px;border-radius:50%;background:var(--sand);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--moss);border:1px solid rgba(64,58,42,.10)}
+  .add{background:var(--clay);color:#fff;font-weight:800;font-size:12px;padding:8px 12px;border-radius:30px;white-space:nowrap;box-shadow:0 5px 12px rgba(192,133,90,.35)}
+
+  /* 地图 */
+  .maparea{flex:1;position:relative;overflow:hidden}
+  #map{position:absolute;inset:0;filter:sepia(.16) saturate(1.06) hue-rotate(-6deg) brightness(1.03)}
+  .mapfade{position:absolute;inset:0;pointer-events:none;z-index:5;box-shadow:inset 0 12px 22px -12px rgba(120,110,80,.4), inset 0 -16px 26px -12px rgba(120,110,80,.35)}
+  .modechip{position:absolute;top:12px;left:12px;z-index:8;background:rgba(251,247,234,.94);color:var(--moss);font-size:11.5px;font-weight:700;padding:7px 12px;border-radius:30px;backdrop-filter:blur(6px);display:flex;align-items:center;gap:6px;box-shadow:0 6px 16px rgba(80,70,40,.18);border:1px solid rgba(64,58,42,.08)}
+  .modechip b{color:var(--sageDk)}
+
+  /* 高德 marker（亮色）*/
+  .spotM{display:flex;flex-direction:column;align-items:center;gap:3px}
+  .spotM .dot{width:12px;height:12px;border-radius:50%;background:var(--sage);box-shadow:0 0 0 4px rgba(138,165,100,.32),0 2px 5px rgba(0,0,0,.2);border:1.5px solid #fff}
+  .spotM .lab{font-size:10.5px;color:var(--moss);font-weight:800;background:rgba(251,247,234,.95);padding:1px 7px;border-radius:9px;white-space:nowrap;box-shadow:0 2px 6px rgba(80,70,40,.2)}
+  .pinM{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .pinM .b{font-size:11px;font-weight:800;padding:5px 11px;border-radius:18px;white-space:nowrap;box-shadow:0 7px 16px rgba(80,70,40,.3);border:2px solid #fff}
+  .pinM .s{width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.25)}
+  .pinM.best .b{background:var(--clay);color:#fff}.pinM.best .s{background:var(--clay)}
+  .pinM.cand .b{background:var(--slate);color:#fff}.pinM.cand .s{background:var(--slate)}
+
+  /* 底部杂志卡（亮 · 可滑动）*/
+  .dock{background:var(--paper);padding:13px 13px 19px;flex-shrink:0;border-top:1px solid rgba(64,58,42,.08);z-index:20}
+  .dock .hint{font-size:11.5px;color:#7a8466;margin-bottom:6px}
+  .dock .hint b{color:var(--sageDk);font-weight:800}
+  .deck{position:relative;height:150px;margin:2px 0 4px}
+  .deck .scroller{position:absolute;inset:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .deck .scroller::-webkit-scrollbar{display:none}
+  .deck .track{position:relative;height:100%}
+  .deck .card{position:absolute;bottom:0;width:80px;height:104px;border-radius:12px;overflow:hidden;cursor:pointer;
+    border:4px solid #fdfbf2;box-shadow:0 9px 18px -7px rgba(80,70,40,.45);
+    transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .35s;
+    transform-origin:bottom center;will-change:transform}
+  .deck .card img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(1.03)}
+  .deck .card .veil{position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(50,46,30,.72))}
+  .deck .card .nm{position:absolute;left:0;right:0;bottom:38px;text-align:center;font-size:10.5px;font-weight:800;color:#fdfbf2;text-shadow:0 1px 5px rgba(0,0,0,.7);padding:0 4px;line-height:1.1}
+  .deck .card .ck{position:absolute;top:5px;right:5px;width:18px;height:18px;border-radius:50%;background:var(--sage);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;opacity:0;transform:scale(.4);transition:.35s cubic-bezier(.3,1.6,.5,1)}
+  .deck .card.up{border-color:#fff;box-shadow:0 22px 34px -14px rgba(80,70,40,.55),0 0 0 3px var(--sage)}
+  .deck .card.up .ck{opacity:1;transform:scale(1)}
+  .deck .baffle2{position:absolute;left:-13px;right:-13px;bottom:0;height:32px;z-index:40;pointer-events:none;
+    background:linear-gradient(180deg,rgba(244,238,219,0),var(--paper) 78%);}
+  .dock .sel{font-size:11.5px;color:var(--sageDk);font-weight:800;margin-top:2px}
+
+  /* 排行榜（亮）*/
+  .rank{flex:1;overflow-y:auto;background:linear-gradient(180deg,var(--sand),#efe7d0);padding:14px 13px 22px}
+  .rank::-webkit-scrollbar{display:none}
+  .rstat{font-size:11.5px;color:#6c7758;margin-bottom:13px;display:flex;align-items:center;gap:6px}
+  .rstat .m{background:rgba(138,165,100,.22);color:var(--sageDk);padding:3px 9px;border-radius:20px;font-weight:800}
+  .rcard{background:var(--paper2);border-radius:16px;padding:15px 15px 13px;margin-bottom:12px;
+    border:1px solid rgba(64,58,42,.10);box-shadow:0 12px 24px -16px rgba(80,70,40,.4)}
+  .rtop{display:flex;align-items:center;gap:10px}
+  .rno{font-family:var(--serif);font-style:italic;font-weight:600;font-size:26px;width:24px;text-align:center;line-height:1}
+  .rcard:nth-child(2) .rno{color:var(--clay)}.rcard:nth-child(3) .rno{color:var(--sage)}.rcard:nth-child(4) .rno{color:var(--slate)}
+  .rname{flex:1;min-width:0}
+  .rname .n{font-weight:800;font-size:14px;color:var(--moss);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .star{font-size:11.5px;font-weight:800;color:var(--sageDk)}
+  .warn{font-size:10px;font-weight:800;background:#f3e1cd;color:#9a5e2e;padding:2px 7px;border-radius:20px;border:1px solid #e3c19c}
+  .ravg{text-align:right}
+  .ravg .v{font-family:var(--serif);font-style:italic;font-weight:600;font-size:22px;color:var(--clay);line-height:1}
+  .ravg .u{font-size:9.5px;color:#8a7c5e;font-weight:700}
+  .rdetail{margin-top:11px;border-top:1px solid rgba(64,58,42,.10);padding-top:9px;display:flex;flex-direction:column;gap:7px}
+  .row{display:flex;align-items:center;gap:9px;font-size:11.5px}
+  .row .nm{width:84px;color:#5c6a4c;font-weight:600;flex-shrink:0}
+  .row .bar{flex:1;height:7px;border-radius:7px;background:rgba(64,58,42,.08);overflow:hidden}
+  .row .bar i{display:block;height:100%;border-radius:7px}
+  .row .t{width:42px;text-align:right;font-weight:800;color:var(--moss);font-variant-numeric:tabular-nums}
+
+  @media(max-width:760px){.stage{gap:30px}.phone{width:320px;height:680px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>Journey<i>Planner</i></h1>
+    <span class="tag">界面重设计 · 水彩亮色 · 真实高德地图</span>
+  </div>
+
+  <div class="stage">
+    <!-- 屏1 地图 -->
+    <div class="col">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="topbar">
+            <div class="city"><span class="sw">📍</span><span class="nm">西安</span><span class="sw">▾</span></div>
+            <div class="tabs"><button class="on">地图</button><button>排行榜</button></div>
+            <div class="icon">⚙</div>
+            <div class="add">+ 加酒店</div>
+          </div>
+          <div class="maparea">
+            <div id="map"></div>
+            <div class="mapfade"></div>
+            <div class="modechip">🚇 <b>公共交通优先</b> · 3 候选</div>
+          </div>
+          <div class="dock">
+            <div class="hint">已导入 <b>3 家</b> 酒店 · 抽出你想去的景点（左右滑）</div>
+            <div class="deck" id="deck"></div>
+            <div class="sel" id="selLabel">已选 2 个景点</div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">地图 · 真实路网 + 通勤一眼可见</div>
+    </div>
+
+    <!-- 屏2 排行榜 -->
+    <div class="col">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="topbar">
+            <div class="city"><span class="sw">📍</span><span class="nm">西安</span><span class="sw">▾</span></div>
+            <div class="tabs"><button>地图</button><button class="on">排行榜</button></div>
+            <div class="icon">⚙</div>
+            <div class="add">+ 加酒店</div>
+          </div>
+          <div class="rank">
+            <div class="rstat"><span class="m">🚇 公共交通</span> · 到所选 2 个景点 · 平均通勤排名</div>
+            <div class="rcard">
+              <div class="rtop"><div class="rno">1</div>
+                <div class="rname"><div class="n">西安钟楼亚朵酒店 <span class="star">★4.7</span></div></div>
+                <div class="ravg"><div class="v">14</div><div class="u">分钟 / 均</div></div></div>
+              <div class="rdetail">
+                <div class="row"><span class="nm">大唐不夜城</span><span class="bar"><i style="width:55%;background:var(--sage)"></i></span><span class="t">18分</span></div>
+                <div class="row"><span class="nm">钟楼</span><span class="bar"><i style="width:28%;background:var(--sky)"></i></span><span class="t">9分</span></div></div>
+            </div>
+            <div class="rcard">
+              <div class="rtop"><div class="rno">2</div>
+                <div class="rname"><div class="n">西安城墙书香酒店 <span class="star">★4.4</span> <span class="warn">⚠ 隔音</span></div></div>
+                <div class="ravg"><div class="v">21</div><div class="u">分钟 / 均</div></div></div>
+              <div class="rdetail">
+                <div class="row"><span class="nm">大唐不夜城</span><span class="bar"><i style="width:70%;background:var(--clay)"></i></span><span class="t">24分</span></div>
+                <div class="row"><span class="nm">钟楼</span><span class="bar"><i style="width:50%;background:var(--sage)"></i></span><span class="t">17分</span></div></div>
+            </div>
+            <div class="rcard">
+              <div class="rtop"><div class="rno">3</div>
+                <div class="rname"><div class="n">曲江如家精选 <span class="star">★4.2</span></div></div>
+                <div class="ravg"><div class="v">26</div><div class="u">分钟 / 均</div></div></div>
+              <div class="rdetail">
+                <div class="row"><span class="nm">大唐不夜城</span><span class="bar"><i style="width:35%;background:var(--sky)"></i></span><span class="t">12分</span></div>
+                <div class="row"><span class="nm">钟楼</span><span class="bar"><i style="width:92%;background:var(--clay)"></i></span><span class="t">40分</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">排行榜 · 均通勤排序 + 雷点标记</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.addEventListener('load', () => {
+    if (typeof AMap === 'undefined') return;
+    const map = new AMap.Map('map', {
+      center:[108.9470, 34.2470], zoom:13.2, viewMode:'2D',
+      mapStyle:'amap://styles/whitesmoke', showLabel:true,
+    });
+    const spots = [
+      { name:'钟楼', lng:108.9408, lat:34.2582 },
+      { name:'大唐不夜城', lng:108.9605, lat:34.2227 },
+      { name:'回民街', lng:108.9340, lat:34.2660 },
+    ];
+    const hotels = [
+      { name:'最顺 · 均14分', lng:108.9450, lat:34.2560, cls:'best' },
+      { name:'候选 · 均26分', lng:108.9620, lat:34.2300, cls:'cand' },
+    ];
+    spots.forEach(s => map.add(new AMap.Marker({ position:[s.lng,s.lat], anchor:'center',
+      content:`<div class="spotM"><span class="dot"></span><span class="lab">${s.name}</span></div>`, zIndex:60 })));
+    hotels.forEach(h => map.add(new AMap.Marker({ position:[h.lng,h.lat], anchor:'bottom-center',
+      content:`<div class="pinM ${h.cls}"><span class="b">${h.name}</span><span class="s"></span></div>`, zIndex:80 })));
+    const best = hotels[0];
+    [spots[0], spots[1]].forEach(s => map.add(new AMap.Polyline({
+      path:[[best.lng,best.lat],[s.lng,s.lat]], strokeColor:'#c0855a', strokeWeight:3.5,
+      strokeStyle:'dashed', strokeOpacity:.95, lineJoin:'round', zIndex:50 })));
+    map.setFitView(null, false, [40,40,40,40]);
+  });
+
+  // 底部横排杂志卡（可左右滑动）
+  (function(){
+    const ATTR = [
+      { name:'大唐不夜城', seed:'tangcity', on:true  },
+      { name:'钟楼',       seed:'belltower', on:true },
+      { name:'兵马俑',     seed:'warriors', on:false },
+      { name:'城墙',       seed:'citywall', on:false },
+      { name:'陕历博',     seed:'museum',   on:false },
+      { name:'回民街',     seed:'muslimst', on:false },
+    ];
+    const deck = document.getElementById('deck');
+    const selLabel = document.getElementById('selLabel');
+    if (!deck) return;
+    const n = ATTR.length, CARD_W = 80, STEP = 66;
+    const tilts = [-4, 3, -2.5, 4, -3, 2];
+    const selected = new Set();
+    const scroller = document.createElement('div'); scroller.className = 'scroller';
+    const track = document.createElement('div'); track.className = 'track';
+    track.style.width = ((n - 1) * STEP + CARD_W + 8) + 'px';
+    scroller.appendChild(track); deck.appendChild(scroller);
+    ATTR.forEach((a, i) => {
+      const card = document.createElement('div');
+      card.className = 'card' + (a.on ? ' up' : '');
+      card.style.left = (i * STEP) + 'px';
+      card.style.zIndex = (i + 1);
+      card.dataset.i = i;
+      card.innerHTML = `<img src="https://picsum.photos/seed/${a.seed}/200/280" alt="">
+        <div class="veil"></div><div class="ck">✓</div><div class="nm">${a.name}</div>`;
+      setT(card, a.on);
+      if (a.on) selected.add(a.name);
+      card.addEventListener('click', () => {
+        const up = card.classList.toggle('up');
+        up ? selected.add(a.name) : selected.delete(a.name);
+        setT(card, up); updateSel();
+      });
+      track.appendChild(card);
+    });
+    const baffle = document.createElement('div'); baffle.className = 'baffle2'; deck.appendChild(baffle);
+    function setT(card, up){
+      const i = +card.dataset.i;
+      card.style.transform = up ? 'translateY(-28px) rotate(0deg) scale(1.05)' : 'rotate(' + tilts[i] + 'deg)';
+    }
+    function updateSel(){ selLabel.textContent = selected.size ? ('已选 ' + selected.size + ' 个景点') : '点卡片选择景点'; }
+    updateSel();
+  })();
+</script>
+</body>
+</html>
