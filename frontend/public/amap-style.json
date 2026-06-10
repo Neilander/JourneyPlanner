@@ -1,0 +1,92 @@
+[
+  {
+    "featureType": "background",
+    "elementType": "all",
+    "stylers": { "color": "#f4eedb" }
+  },
+  {
+    "featureType": "land",
+    "elementType": "all",
+    "stylers": { "color": "#f4eedb" }
+  },
+  {
+    "featureType": "green",
+    "elementType": "all",
+    "stylers": { "color": "#d8e4c8" }
+  },
+  {
+    "featureType": "water",
+    "elementType": "all",
+    "stylers": { "color": "#c8dce8" }
+  },
+  {
+    "featureType": "highway",
+    "elementType": "geometry",
+    "stylers": { "color": "#e8dec3" }
+  },
+  {
+    "featureType": "highway",
+    "elementType": "labels",
+    "stylers": { "visibility": "off" }
+  },
+  {
+    "featureType": "arterial",
+    "elementType": "geometry",
+    "stylers": { "color": "#efe6cc" }
+  },
+  {
+    "featureType": "arterial",
+    "elementType": "labels.text.fill",
+    "stylers": { "color": "#8a7c5e" }
+  },
+  {
+    "featureType": "local",
+    "elementType": "geometry",
+    "stylers": { "color": "#f4eedb" }
+  },
+  {
+    "featureType": "local",
+    "elementType": "labels.text.fill",
+    "stylers": { "color": "#a09070" }
+  },
+  {
+    "featureType": "railway",
+    "elementType": "geometry",
+    "stylers": { "color": "#cdbf9d" }
+  },
+  {
+    "featureType": "subway",
+    "elementType": "geometry",
+    "stylers": { "color": "#9fb6bf", "weight": 1 }
+  },
+  {
+    "featureType": "subway",
+    "elementType": "labels",
+    "stylers": { "visibility": "off" }
+  },
+  {
+    "featureType": "building",
+    "elementType": "all",
+    "stylers": { "color": "#ede4cc" }
+  },
+  {
+    "featureType": "poi",
+    "elementType": "all",
+    "stylers": { "visibility": "off" }
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "labels.text.fill",
+    "stylers": { "color": "#5c6a4c" }
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "labels.text.stroke",
+    "stylers": { "color": "#f4eedb", "weight": 2 }
+  },
+  {
+    "featureType": "scenicspots",
+    "elementType": "all",
+    "stylers": { "visibility": "off" }
+  }
+]
