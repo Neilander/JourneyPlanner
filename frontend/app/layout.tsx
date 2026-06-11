@@ -6,6 +6,7 @@ const zcoolKuaiLe = ZCOOL_KuaiLe({
   weight: "400",
   subsets: ["chinese-simplified"],
   display: "swap",
+  variable: "--font-display",
 });
 
 export const metadata: Metadata = {
@@ -20,7 +21,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className="h-full antialiased">
-      <body className={`${zcoolKuaiLe.className} min-h-full flex flex-col`}>{children}</body>
+      <body className={`${zcoolKuaiLe.variable} min-h-full flex flex-col`} style={{ fontFamily: "'LXGW WenKai Screen', 'LXGW WenKai', serif" }}>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/style.css" />
+        {children}
+      </body>
     </html>
   );
 }

@@ -354,21 +354,22 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
+    <div className="flex flex-col h-screen" style={{ background: 'var(--base)' }}>
       {/* City picker modal */}
       {showCityPicker && (
-        <div className="absolute inset-0 bg-black/60 z-50 flex flex-col">
-          <div className="bg-white m-4 mt-16 rounded-xl overflow-hidden flex flex-col max-h-[70vh]">
-            <div className="flex items-center gap-2 p-3 border-b">
+        <div className="absolute inset-0 bg-black/50 z-50 flex flex-col">
+          <div className="m-4 mt-16 rounded-2xl overflow-hidden flex flex-col max-h-[70vh]" style={{ background: 'var(--surface)' }}>
+            <div className="flex items-center gap-2 p-3 border-b" style={{ borderColor: 'var(--cream)' }}>
               <input
                 autoFocus
-                className="flex-1 text-sm outline-none"
+                className="flex-1 text-sm outline-none bg-transparent"
+                style={{ color: 'var(--ink)' }}
                 placeholder="搜索城市，如：成都"
                 value={cityInput}
                 onChange={e => setCityInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && cityInput.trim()) switchCity(cityInput) }}
               />
-              <button onClick={() => setShowCityPicker(false)} className="text-gray-400 text-sm">取消</button>
+              <button onClick={() => setShowCityPicker(false)} className="text-sm" style={{ color: 'var(--ink-mid)' }}>取消</button>
             </div>
             <div className="overflow-y-auto">
               <div className="flex flex-wrap gap-2 p-3">
@@ -376,13 +377,17 @@ export default function Home() {
                   <button
                     key={c}
                     onClick={() => switchCity(c)}
-                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${c === cityName ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-700 hover:border-orange-400'}`}
+                    className="px-3 py-1.5 rounded-full text-sm border transition-colors"
+                    style={c === cityName
+                      ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
+                      : { borderColor: 'var(--cream)', color: 'var(--ink-mid)' }}
                   >{c}</button>
                 ))}
                 {filteredCities.length === 0 && cityInput && (
                   <button
                     onClick={() => switchCity(cityInput)}
-                    className="px-3 py-1.5 rounded-full text-sm bg-orange-500 text-white"
+                    className="px-3 py-1.5 rounded-full text-sm text-white"
+                    style={{ background: 'var(--accent)' }}
                   >搜索「{cityInput}」</button>
                 )}
               </div>
@@ -392,39 +397,42 @@ export default function Home() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-800 text-white">
+      <div className="flex items-center justify-between px-4 py-3" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--cream)' }}>
         <button
           onClick={() => setShowCityPicker(true)}
-          className="flex items-center gap-1.5 bg-gray-700 hover:bg-orange-500 transition-colors px-3 py-1.5 rounded-full"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors"
+          style={{ background: 'var(--cream)', color: 'var(--ink)' }}
         >
           <span className="text-sm">📍</span>
           <span className="font-bold text-sm">{cityName}</span>
-          <span className="text-gray-400 text-xs">切换 ▾</span>
+          <span className="text-xs" style={{ color: 'var(--ink-mid)' }}>切换 ▾</span>
         </button>
         <div className="flex items-center gap-2">
-          <div className="flex bg-gray-700 rounded-full p-0.5 text-sm">
+          <div className="flex rounded-full p-0.5 text-sm" style={{ background: 'var(--cream)' }}>
             <button
               onClick={() => setTab('map')}
-              className={`px-3 py-1 rounded-full transition-colors ${tab === 'map' ? 'bg-white text-gray-900 font-medium' : 'text-gray-400'}`}
+              className="px-3 py-1 rounded-full transition-colors"
+              style={tab === 'map' ? { background: 'var(--primary)', color: '#fff', fontWeight: 600 } : { color: 'var(--ink-mid)' }}
             >地图</button>
             <button
               onClick={() => setTab('rank')}
-              className={`px-3 py-1 rounded-full transition-colors ${tab === 'rank' ? 'bg-white text-gray-900 font-medium' : 'text-gray-400'}`}
+              className="px-3 py-1 rounded-full transition-colors"
+              style={tab === 'rank' ? { background: 'var(--primary)', color: '#fff', fontWeight: 600 } : { color: 'var(--ink-mid)' }}
             >排行榜</button>
           </div>
           <button
             onClick={() => setShowSettings(true)}
-            className="text-sm bg-gray-700 px-3 py-1 rounded-full"
+            className="text-sm px-3 py-1 rounded-full"
+            style={{ background: 'var(--cream)', color: 'var(--ink)' }}
             title="通勤偏好"
           >⚙</button>
           {hotels.length > 0 && (
             <button
               onClick={() => setShowHotelManager(true)}
-              className={`text-sm px-3 py-1 rounded-full ${
-                hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高'))
-                  ? 'bg-red-500 text-white'
-                  : 'bg-gray-600 text-white'
-              }`}
+              className="text-sm px-3 py-1 rounded-full"
+              style={hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高'))
+                ? { background: '#e05a4a', color: '#fff' }
+                : { background: 'var(--cream)', color: 'var(--ink)' }}
             >
               {hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高')) ? '⚠ ' : ''}
               酒店 {hotels.length}
@@ -432,28 +440,30 @@ export default function Home() {
           )}
           <button
             onClick={() => setShowSearch(true)}
-            className="text-sm bg-orange-500 px-3 py-1 rounded-full"
+            className="text-sm px-3 py-1 rounded-full text-white"
+            style={{ background: 'var(--accent)' }}
           >+ 添加酒店</button>
         </div>
       </div>
 
       {/* Search modal */}
       {showSearch && (
-        <div className="absolute inset-0 bg-black/60 z-50 flex flex-col">
-          <div className="bg-white m-4 mt-16 rounded-xl overflow-hidden flex flex-col max-h-[70vh]">
-            <div className="flex items-center gap-2 p-3 border-b">
+        <div className="absolute inset-0 bg-black/50 z-50 flex flex-col">
+          <div className="m-4 mt-16 rounded-2xl overflow-hidden flex flex-col max-h-[70vh]" style={{ background: 'var(--surface)' }}>
+            <div className="flex items-center gap-2 p-3 border-b" style={{ borderColor: 'var(--cream)' }}>
               <input
                 autoFocus
-                className="flex-1 text-sm outline-none"
+                className="flex-1 text-sm outline-none bg-transparent"
+                style={{ color: 'var(--ink)' }}
                 placeholder="搜索酒店名称，如：西安钟楼亚朵"
                 value={searchKeyword}
                 onChange={e => setSearchKeyword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
               />
-              <button onClick={handleSearch} className="text-orange-500 text-sm font-medium">
+              <button onClick={handleSearch} className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
                 {searching ? '搜索中…' : '搜索'}
               </button>
-              <button onClick={() => { setShowSearch(false); setSearchResults([]) }} className="text-gray-400 text-sm ml-1">
+              <button onClick={() => { setShowSearch(false); setSearchResults([]) }} className="text-sm ml-1" style={{ color: 'var(--ink-mid)' }}>
                 取消
               </button>
             </div>
@@ -462,14 +472,15 @@ export default function Home() {
                 <div
                   key={p.id}
                   onClick={() => addHotel(p)}
-                  className="flex flex-col px-4 py-3 border-b cursor-pointer hover:bg-gray-50"
+                  className="flex flex-col px-4 py-3 border-b cursor-pointer"
+                  style={{ borderColor: 'var(--cream)' }}
                 >
-                  <span className="text-sm font-medium text-gray-900">{p.name}</span>
-                  <span className="text-xs text-gray-400 mt-0.5">{p.address}</span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{p.name}</span>
+                  <span className="text-xs mt-0.5" style={{ color: 'var(--ink-mid)' }}>{p.address}</span>
                 </div>
               ))}
               {searchResults.length === 0 && !searching && searchKeyword && (
-                <p className="text-center text-gray-400 text-sm py-8">没有找到结果</p>
+                <p className="text-center text-sm py-8" style={{ color: 'var(--ink-mid)' }}>没有找到结果</p>
               )}
             </div>
           </div>
@@ -478,11 +489,11 @@ export default function Home() {
 
       {/* Commute settings panel */}
       {showSettings && (
-        <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col justify-end">
-          <div className="bg-white rounded-t-2xl p-5">
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex flex-col justify-end">
+          <div className="rounded-t-3xl p-5" style={{ background: 'var(--surface)' }}>
             <div className="flex items-center justify-between mb-4">
-              <span className="font-bold text-base">通勤偏好</span>
-              <button onClick={() => setShowSettings(false)} className="text-gray-400 text-sm">完成</button>
+              <span className="font-bold text-base" style={{ color: 'var(--ink)' }}>通勤偏好</span>
+              <button onClick={() => setShowSettings(false)} className="text-sm" style={{ color: 'var(--ink-mid)' }}>完成</button>
             </div>
             <div className="space-y-3">
               {([
@@ -493,58 +504,60 @@ export default function Home() {
                 <button
                   key={mode}
                   onClick={() => { setCommuteMode(mode); setCommuteMatrix({}) }}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${
-                    commuteMode === mode ? 'border-orange-500 bg-orange-50' : 'border-gray-100'
-                  }`}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-colors"
+                  style={commuteMode === mode
+                    ? { borderColor: 'var(--accent)', background: '#fdf3e7' }
+                    : { borderColor: 'var(--cream)', background: 'transparent' }}
                 >
                   <span className="text-2xl">{icon}</span>
                   <div className="text-left">
-                    <div className="font-medium text-sm text-gray-900">{label}</div>
-                    <div className="text-xs text-gray-400">{desc}</div>
+                    <div className="font-medium text-sm" style={{ color: 'var(--ink)' }}>{label}</div>
+                    <div className="text-xs" style={{ color: 'var(--ink-mid)' }}>{desc}</div>
                   </div>
-                  {commuteMode === mode && <span className="ml-auto text-orange-500 text-lg">✓</span>}
+                  {commuteMode === mode && <span className="ml-auto text-lg" style={{ color: 'var(--accent)' }}>✓</span>}
                 </button>
               ))}
             </div>
-            <p className="text-xs text-gray-400 mt-3 text-center">切换后将重新计算真实路线时间</p>
+            <p className="text-xs mt-3 text-center" style={{ color: 'var(--ink-mid)' }}>切换后将重新计算真实路线时间</p>
           </div>
         </div>
       )}
 
       {/* Hotel manager modal */}
       {showHotelManager && (
-        <div className="absolute inset-0 bg-black/60 z-50 flex flex-col">
-          <div className="bg-white m-4 mt-16 rounded-xl overflow-hidden flex flex-col max-h-[70vh]">
-            <div className="flex items-center justify-between p-3 border-b">
-              <span className="font-medium text-sm">候选酒店（{hotels.length}家）</span>
+        <div className="absolute inset-0 bg-black/50 z-50 flex flex-col">
+          <div className="m-4 mt-16 rounded-2xl overflow-hidden flex flex-col max-h-[70vh]" style={{ background: 'var(--surface)' }}>
+            <div className="flex items-center justify-between p-3 border-b" style={{ borderColor: 'var(--cream)' }}>
+              <span className="font-medium text-sm" style={{ color: 'var(--ink)' }}>候选酒店（{hotels.length}家）</span>
               <div className="flex items-center gap-2">
                 {uidRef.current && (
                   <button
                     onClick={() => loadHotels(uidRef.current)}
-                    className="text-blue-500 text-xs px-2 py-0.5 rounded hover:bg-blue-50"
+                    className="text-xs px-2 py-0.5 rounded"
+                    style={{ color: 'var(--blue)' }}
                     title="刷新分析数据"
                   >↻ 刷新</button>
                 )}
-                <button onClick={() => setShowHotelManager(false)} className="text-gray-400 text-sm">完成</button>
+                <button onClick={() => setShowHotelManager(false)} className="text-sm" style={{ color: 'var(--ink-mid)' }}>完成</button>
               </div>
             </div>
             <div className="overflow-y-auto">
               {hotels.length === 0 && (
-                <p className="text-center text-gray-400 text-sm py-8">暂无候选酒店</p>
+                <p className="text-center text-sm py-8" style={{ color: 'var(--ink-mid)' }}>暂无候选酒店</p>
               )}
               {hotels.map(h => (
-                <div key={h.id} className="px-4 py-3 border-b">
+                <div key={h.id} className="px-4 py-3 border-b" style={{ borderColor: 'var(--cream)' }}>
                   <div className="flex items-center">
-                    <span className="flex-1 text-sm font-medium text-gray-900">{h.name}</span>
+                    <span className="flex-1 text-sm font-medium" style={{ color: 'var(--ink)' }}>{h.name}</span>
                     {h.analysis?.amap_rating && (
-                      <span className={`text-xs font-bold mr-2 ${h.analysis.amap_rating >= 4.5 ? 'text-green-500' : h.analysis.amap_rating >= 4.0 ? 'text-orange-400' : 'text-red-500'}`}>
+                      <span className={`text-xs font-bold mr-2 ${h.analysis.amap_rating >= 4.5 ? 'text-green-600' : h.analysis.amap_rating >= 4.0 ? 'text-orange-500' : 'text-red-500'}`}>
                         ★ {h.analysis.amap_rating}
                       </span>
                     )}
-                    <button onClick={() => removeHotel(h.id)} className="text-red-400 text-xs px-2 py-1 rounded hover:bg-red-50">删除</button>
+                    <button onClick={() => removeHotel(h.id)} className="text-red-400 text-xs px-2 py-1 rounded">删除</button>
                   </div>
                   {(!h.analysis || (h.analysis.amap_rating == null && !h.analysis.summary)) && (
-                    <p className="text-xs text-gray-400 mt-1 animate-pulse">⏳ 正在分析中，请稍后刷新…</p>
+                    <p className="text-xs mt-1 animate-pulse" style={{ color: 'var(--ink-mid)' }}>⏳ 正在分析中，请稍后刷新…</p>
                   )}
                   {h.analysis?.summary && (
                     <div className="mt-2 space-y-1">
@@ -561,7 +574,7 @@ export default function Home() {
                           ))}
                         </div>
                       )}
-                      <p className="text-xs text-gray-400 italic">{h.analysis.summary.verdict}</p>
+                      <p className="text-xs italic" style={{ color: 'var(--ink-mid)' }}>{h.analysis.summary.verdict}</p>
                     </div>
                   )}
                 </div>
@@ -580,22 +593,22 @@ export default function Home() {
 
       {/* Ranking */}
       {tab === 'rank' && (
-        <div className="flex-1 overflow-y-auto bg-gray-900 px-4 py-3">
+        <div className="flex-1 overflow-y-auto px-4 py-3" style={{ background: 'var(--base)' }}>
           {selected.size === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
+            <div className="flex flex-col items-center justify-center h-full text-sm" style={{ color: 'var(--ink-mid)' }}>
               <p>选择想去的景点</p>
               <p className="mt-1">查看酒店通勤排行</p>
             </div>
           ) : hotels.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
+            <div className="flex flex-col items-center justify-center h-full text-sm" style={{ color: 'var(--ink-mid)' }}>
               <p>还没有候选酒店</p>
-              <button onClick={() => { setTab('map'); setShowSearch(true) }} className="mt-2 text-orange-400">+ 添加酒店</button>
+              <button onClick={() => { setTab('map'); setShowSearch(true) }} className="mt-2" style={{ color: 'var(--accent)' }}>+ 添加酒店</button>
             </div>
           ) : (
             <>
-              <p className="text-gray-400 text-xs mb-3 flex items-center gap-1">
+              <p className="text-xs mb-3 flex items-center gap-1" style={{ color: 'var(--ink-mid)' }}>
                 {matrixLoading
-                  ? <span className="text-orange-400 animate-pulse">⏳ 正在计算真实路线...</span>
+                  ? <span className="animate-pulse" style={{ color: 'var(--accent)' }}>⏳ 正在计算真实路线...</span>
                   : <>
                       {Object.keys(commuteMatrix).length > 0
                         ? { transit: '🚇 公共交通', driving: '🚗 驾车', walking: '🚶 步行' }[commuteMode]
@@ -606,28 +619,28 @@ export default function Home() {
                 }
               </p>
               {ranking.map((item, i) => (
-                <div key={item.hotel.id} className="bg-gray-800 rounded-xl p-4 mb-3">
+                <div key={item.hotel.id} className="rounded-2xl p-4 mb-3" style={{ background: 'var(--surface)', boxShadow: '0 2px 8px rgba(74,59,38,0.08)' }}>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-sm font-bold w-6 text-center ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
+                    <span className="text-sm font-bold w-6 text-center" style={{ color: i === 0 ? '#d4a017' : i === 1 ? '#8a7550' : i === 2 ? 'var(--accent)' : 'var(--ink-mid)' }}>
                       {i + 1}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <span className="text-white font-medium text-sm">{item.hotel.name}</span>
+                      <span className="font-medium text-sm" style={{ color: 'var(--ink)' }}>{item.hotel.name}</span>
                       {item.hotel.analysis?.amap_rating && (
-                        <span className={`ml-2 text-xs font-bold ${item.hotel.analysis.amap_rating >= 4.5 ? 'text-green-400' : item.hotel.analysis.amap_rating >= 4.0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        <span className={`ml-2 text-xs font-bold ${item.hotel.analysis.amap_rating >= 4.5 ? 'text-green-600' : item.hotel.analysis.amap_rating >= 4.0 ? 'text-yellow-600' : 'text-red-500'}`}>
                           ★{item.hotel.analysis.amap_rating}
                         </span>
                       )}
                       {item.hotel.analysis?.summary?.warnings.filter(w => w.severity === '高').map((w, i) => (
-                        <span key={i} title={w.detail} className="ml-1 text-xs bg-red-900/50 text-red-300 px-1.5 rounded">⚠ {w.issue}</span>
+                        <span key={i} title={w.detail} className="ml-1 text-xs px-1.5 rounded bg-red-100 text-red-600">⚠ {w.issue}</span>
                       ))}
                     </div>
-                    <span className="text-orange-400 font-bold text-sm">均 {item.avg} 分钟</span>
-                    <button onClick={() => removeHotel(item.hotel.id)} className="ml-2 text-gray-500 hover:text-red-400 text-xs">✕</button>
+                    <span className="font-bold text-sm" style={{ color: 'var(--accent)' }}>均 {item.avg} 分钟</span>
+                    <button onClick={() => removeHotel(item.hotel.id)} className="ml-2 text-xs text-red-400">✕</button>
                   </div>
                   <div className="ml-8 space-y-1">
                     {item.targets.map((a, j) => (
-                      <div key={a.id} className="flex justify-between text-xs text-gray-400">
+                      <div key={a.id} className="flex justify-between text-xs" style={{ color: 'var(--ink-mid)' }}>
                         <span>{a.name}</span>
                         <span>{item.times[j]} 分钟</span>
                       </div>
@@ -640,29 +653,42 @@ export default function Home() {
         </div>
       )}
 
-      {/* Bottom attraction selector */}
-      <div className="bg-gray-800 px-3 py-3">
-        <p className="text-gray-400 text-xs mb-2">
-          {hotels.length > 0 ? `已导入 ${hotels.length} 家酒店 · ` : ''}选择景点查看通勤
-        </p>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {attractions.map(a => (
-            <button
-              key={a.id}
-              onClick={() => toggleSelect(a.id)}
-              className={`flex-shrink-0 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
-                selected.has(a.id)
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-700 text-gray-300'
-              }`}
-            >
-              {a.name}
-            </button>
-          ))}
+      {/* Bottom wave tray — attraction selector */}
+      <div className="relative" style={{ zIndex: 10 }}>
+        {/* 波浪 SVG */}
+        <svg
+          viewBox="0 0 390 48"
+          preserveAspectRatio="none"
+          className="w-full block"
+          style={{ height: 48, marginBottom: -1, filter: 'drop-shadow(0 -2px 4px rgba(120,100,60,0.10))' }}
+        >
+          <path
+            d="M0,28 C60,10 110,4 170,18 C210,28 250,36 305,22 C335,14 362,12 390,20 L390,48 L0,48 Z"
+            fill="var(--surface)"
+          />
+        </svg>
+        <div className="px-3 pb-4 pt-0" style={{ background: 'var(--surface)' }}>
+          <p className="text-xs mb-2" style={{ color: 'var(--ink-mid)' }}>
+            {hotels.length > 0 ? `已导入 ${hotels.length} 家酒店 · ` : ''}抽出你想去的景点
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {attractions.map(a => (
+              <button
+                key={a.id}
+                onClick={() => toggleSelect(a.id)}
+                className="flex-shrink-0 px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                style={selected.has(a.id)
+                  ? { background: 'var(--primary)', color: '#fff' }
+                  : { background: 'var(--cream)', color: 'var(--ink-mid)' }}
+              >
+                {a.name}
+              </button>
+            ))}
+          </div>
+          {selected.size > 0 && (
+            <p className="text-xs mt-2" style={{ color: 'var(--accent)' }}>已选 {selected.size} 个景点</p>
+          )}
         </div>
-        {selected.size > 0 && (
-          <p className="text-orange-400 text-xs mt-2">已选 {selected.size} 个景点</p>
-        )}
       </div>
     </div>
   )
