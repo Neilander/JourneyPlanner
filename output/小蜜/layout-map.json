@@ -1,0 +1,65 @@
+{
+  "meta": {
+    "name": "小蜜-地图页",
+    "device": "iphone-portrait",
+    "frame_width": 390,
+    "frame_height": 844,
+    "summary": "地图页：高德地图上显示景点与候选酒店 pin，底部一排可滑动的手绘景点卡，点选景点参与通勤计算。"
+  },
+  "palette": {
+    "base": "#F5E9C8",
+    "surface": "#FBF4DD",
+    "primary": "#6FA04A",
+    "accent": ["#E0883C", "#8FB8C4"],
+    "ink": "#4A3B26",
+    "ink_mid": "#8A7550"
+  },
+  "fonts": { "display": "ZCOOL KuaiLe", "body": "LXGW WenKai Screen" },
+  "screen": {
+    "mode": "canvas",
+    "topbar": [
+      { "type": "status-bar", "time": "9:41" },
+      { "type": "header", "transparent": false,
+        "content": {
+          "left": { "type": "city-pill", "label": "杭州 ▾" },
+          "nav": [
+            { "label": "地图", "icon": "map", "active": true },
+            { "label": "排行榜", "icon": "ranking", "active": false },
+            { "label": "设置", "icon": "settings" },
+            { "label": "导入", "icon": "import" }
+          ]
+        } }
+    ],
+    "background": {
+      "type": "map-area",
+      "base_image_ref": "map-base",
+      "base_bounds": { "anchor": "center", "fit": "width", "size_pct": 100, "offset_x_pct": 0, "offset_y_pct": 0 },
+      "overlay": [
+        { "kind": "marker", "marker_type": "attraction", "text": "雷峰塔", "anchor_to": "base", "x_pct": 30, "y_pct": 70 },
+        { "kind": "marker", "marker_type": "attraction", "text": "三潭印月", "anchor_to": "base", "x_pct": 44, "y_pct": 58 },
+        { "kind": "marker", "marker_type": "attraction", "text": "断桥残雪", "anchor_to": "base", "x_pct": 52, "y_pct": 34 },
+        { "kind": "marker", "marker_type": "attraction", "text": "灵隐寺", "anchor_to": "base", "x_pct": 20, "y_pct": 40 },
+        { "kind": "marker", "marker_type": "hotel", "text": "酒店", "anchor_to": "base", "x_pct": 62, "y_pct": 48 },
+        { "kind": "marker", "marker_type": "hotel", "text": "酒店", "anchor_to": "base", "x_pct": 70, "y_pct": 66 },
+        { "kind": "marker", "marker_type": "hotel", "text": "酒店", "anchor_to": "base", "x_pct": 40, "y_pct": 80 }
+      ]
+    },
+    "sheet": {
+      "type": "bottom-sheet",
+      "expanded_height": 200,
+      "drag_handle": false,
+      "expandable": true,
+      "z": 80,
+      "content": [
+        { "kind": "horizontal-list", "title": "景点卡（可左右滑，点选上浮）",
+          "items": [
+            { "image_ref": "card-leifeng", "label": "雷峰塔", "heart": true },
+            { "image_ref": "card-santan", "label": "三潭印月", "heart": true, "selected": true },
+            { "image_ref": "card-duanqiao", "label": "断桥残雪", "heart": true },
+            { "image_ref": "card-lingyin", "label": "灵隐寺", "heart": true }
+          ] },
+        { "kind": "pager-dots", "count": 3, "active": 0 }
+      ]
+    }
+  }
+}

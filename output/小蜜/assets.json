@@ -1,0 +1,44 @@
+{
+  "assets": [
+    {
+      "id": "map-base",
+      "filename": "map-base.png",
+      "aspect": "9:16",
+      "role": "map",
+      "prompt": "Full-bleed top-down stylized city map of a lakeside town (West Lake / Hangzhou feel): a large soft blue lake on the left-center, green park areas, thin road network, a few bridges. Hand-painted gouache look, warm cream land, muted sage greens, dusty blue water. No text, no labels, no street names, no numbers, no pins, no markers.",
+      "post_process": "none"
+    },
+    {
+      "id": "card-leifeng",
+      "filename": "card-leifeng.png",
+      "aspect": "3:4",
+      "role": "card",
+      "prompt": "Portrait 3:4, a single tall pagoda (Leifeng Pagoda) on a hill by a lake at warm daylight, framed centered. Hand-painted gouache illustration, calm, postcard-like. No text, no letters, no numbers.",
+      "post_process": "none"
+    },
+    {
+      "id": "card-santan",
+      "filename": "card-santan.png",
+      "aspect": "3:4",
+      "role": "card",
+      "prompt": "Portrait 3:4, three small stone lantern pagodas standing in calm lake water (Three Pools Mirroring the Moon), distant green hills behind, soft daylight. Hand-painted gouache illustration. No text, no letters, no numbers.",
+      "post_process": "none"
+    },
+    {
+      "id": "card-duanqiao",
+      "filename": "card-duanqiao.png",
+      "aspect": "3:4",
+      "role": "card",
+      "prompt": "Portrait 3:4, an arched stone causeway bridge over a lake with willow trees (Broken Bridge), green and cream tones, gentle daylight. Hand-painted gouache illustration. No text, no letters, no numbers.",
+      "post_process": "none"
+    },
+    {
+      "id": "card-lingyin",
+      "filename": "card-lingyin.png",
+      "aspect": "3:4",
+      "role": "card",
+      "prompt": "Portrait 3:4, an old temple roof nestled among tall green forested mountains (Lingyin Temple), misty calm mood. Hand-painted gouache illustration. No text, no letters, no numbers.",
+      "post_process": "none"
+    }
+  ]
+}

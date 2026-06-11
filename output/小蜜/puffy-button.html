@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小蜜 · 鼓边按钮（带噪声）</title>
+<link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet">
+<style>
+  :root{ --base:#f4e8c6; --gold:#f1ce63; --cream:#f6edd2; --ink:#4a3b26;
+    --font:'LXGW WenKai','LXGW WenKai TC',sans-serif; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#ece1bf;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:34px 16px;color:var(--ink)}
+  h1{font-size:18px;margin-bottom:4px}
+  .note{font-size:12.5px;color:#6a5a3c;margin-bottom:22px;text-align:center;max-width:400px;line-height:1.6}
+
+  .controls{display:flex;gap:16px;align-items:center;margin-bottom:26px;flex-wrap:wrap;justify-content:center;font-size:13px;color:#5c4d31}
+  .controls input[type=range]{accent-color:#df8a45}
+  .controls button{font-family:var(--font);border:none;background:var(--gold);color:var(--ink);padding:7px 14px;border-radius:10px;cursor:pointer;font-size:13px;box-shadow:0 2px 4px rgba(74,59,38,.2)}
+
+  .pbtn{position:relative;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;cursor:pointer;font-family:var(--font);color:var(--ink);padding:0}
+  .pbtn svg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 4px 4px rgba(74,59,38,.18))}
+  .pbtn path{fill:var(--fill,#f6edd2)}
+  .pbtn .lbl{position:relative;z-index:2;font-weight:600}
+
+  .big{width:150px;height:168px}
+  .big .lbl{font-size:28px;letter-spacing:.1em}
+  .fgold{--fill:var(--gold)} .fcream{--fill:var(--cream)} .fwhite{--fill:#fff}
+
+  .row{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;justify-content:center}
+  .sq{width:78px;height:84px}.sq .lbl{font-size:16px}
+  .wide{width:108px;height:84px}.wide .lbl{font-size:16px}
+
+  .cap{margin-top:30px;font-size:12px;color:#6a5a3c;text-align:center;max-width:430px;line-height:1.7}
+</style>
+</head>
+<body>
+  <h1>鼓边按钮 · 四角 + 鼓边中心加噪声</h1>
+  <div class="note">每个按钮的四个角和四条边的鼓起点都加了小随机偏移 → 每个略不同、像手画的。拖滑块调偏移大小。</div>
+
+  <div class="controls">
+    <label>噪声偏移 <input id="amt" type="range" min="0" max="12" value="5"> <span id="amtv">5</span></label>
+    <button onclick="reroll()">↻ 换一批</button>
+  </div>
+
+  <button class="pbtn big fcream"><svg viewBox="0 0 200 220" preserveAspectRatio="none"><path/></svg><span class="lbl">设置</span></button>
+
+  <div class="row">
+    <button class="pbtn wide fgold"><svg viewBox="0 0 200 220" preserveAspectRatio="none"><path/></svg><span class="lbl">杭州 ▾</span></button>
+    <button class="pbtn sq fwhite"><svg viewBox="0 0 200 220" preserveAspectRatio="none"><path/></svg><span class="lbl">地图</span></button>
+    <button class="pbtn sq fcream"><svg viewBox="0 0 200 220" preserveAspectRatio="none"><path/></svg><span class="lbl">排行榜</span></button>
+    <button class="pbtn sq fgold"><svg viewBox="0 0 200 220" preserveAspectRatio="none"><path/></svg><span class="lbl">导入</span></button>
+  </div>
+
+  <div class="cap">噪声只动「四个角」和「四边鼓起中心」，偏移很小（默认 ±5 / 200）。觉得太抖或太规整，拖滑块。</div>
+
+  <script>
+    // 种子随机
+    function rng(seed){ let s=seed%233280; return ()=>{ s=(s*9301+49297)%233280; return s/233280; }; }
+    const J=(r,a)=>(r()*2-1)*a;
+
+    // 基础锚点（四角）与鼓边控制点
+    function buildPath(seed, amt){
+      const r = rng(seed);
+      const cornerJ = amt;          // 角偏移
+      const bulgeJ  = amt*1.2;      // 鼓起中心偏移
+      const A = { // 四角附近的 on-curve 锚点
+        p0:[40,12], p1:[160,12], p2:[188,40], p3:[188,180],
+        p4:[160,208], p5:[40,208], p6:[12,180], p7:[12,40]
+      };
+      for(const k in A){ A[k]=[A[k][0]+J(r,cornerJ), A[k][1]+J(r,cornerJ)]; }
+      const cb=(x,y)=>[x+J(r,bulgeJ), y+J(r,bulgeJ)];   // 鼓边控制点（带偏移）
+      const cc=(x,y)=>[x+J(r,cornerJ*0.6), y+J(r,cornerJ*0.6)]; // 圆角控制点（小偏移）
+      const t1=cb(80,2),  t2=cb(120,2);     // 上边鼓
+      const r1=cb(198,80),r2=cb(198,140);   // 右边鼓
+      const b1=cb(120,218),b2=cb(80,218);   // 下边鼓
+      const l1=cb(2,140), l2=cb(2,80);      // 左边鼓
+      const tr1=cc(176,16),tr2=cc(184,24), br1=cc(184,196),br2=cc(176,204),
+            bl1=cc(24,204),bl2=cc(16,196), tl1=cc(16,24), tl2=cc(24,16);
+      const f=p=>p[0].toFixed(1)+','+p[1].toFixed(1);
+      return `M${f(A.p0)} C${f(t1)} ${f(t2)} ${f(A.p1)} C${f(tr1)} ${f(tr2)} ${f(A.p2)} `
+           + `C${f(r1)} ${f(r2)} ${f(A.p3)} C${f(br1)} ${f(br2)} ${f(A.p4)} `
+           + `C${f(b1)} ${f(b2)} ${f(A.p5)} C${f(bl1)} ${f(bl2)} ${f(A.p6)} `
+           + `C${f(l1)} ${f(l2)} ${f(A.p7)} C${f(tl1)} ${f(tl2)} ${f(A.p0)} Z`;
+    }
+
+    let base = 17;
+    function render(){
+      const amt = +document.getElementById('amt').value;
+      document.getElementById('amtv').textContent = amt;
+      document.querySelectorAll('.pbtn').forEach((btn,i)=>{
+        btn.querySelector('path').setAttribute('d', buildPath(base + i*131 + 1, amt));
+      });
+    }
+    function reroll(){ base = Math.floor(Math.random()*99999); render(); }
+    document.getElementById('amt').addEventListener('input', render);
+    render();
+  </script>
+</body>
+</html>

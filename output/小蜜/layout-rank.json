@@ -1,0 +1,69 @@
+{
+  "meta": {
+    "name": "小蜜-排行榜页",
+    "device": "iphone-portrait",
+    "frame_width": 390,
+    "frame_height": 844,
+    "summary": "排行榜页：按平均通勤时间给候选酒店排名，每张卡列出多种交通方式耗时+雷点备注，底部景点卡轮播探头。"
+  },
+  "palette": {
+    "base": "#F5E9C8",
+    "surface": "#FBF4DD",
+    "primary": "#6FA04A",
+    "accent": ["#E0883C", "#8FB8C4"],
+    "ink": "#4A3B26",
+    "ink_mid": "#8A7550"
+  },
+  "fonts": { "display": "ZCOOL KuaiLe", "body": "LXGW WenKai Screen" },
+  "screen": {
+    "mode": "feed",
+    "topbar": [
+      { "type": "status-bar", "time": "9:41" },
+      { "type": "header", "transparent": false,
+        "content": {
+          "left": { "type": "city-pill", "label": "杭州 ▾" },
+          "nav": [
+            { "label": "地图", "icon": "map", "active": false },
+            { "label": "排行榜", "icon": "ranking", "active": true },
+            { "label": "设置", "icon": "settings" },
+            { "label": "导入", "icon": "import" }
+          ]
+        } }
+    ],
+    "content": [
+      { "type": "title-row", "title": "🍯 酒店通勤时间排行榜 ⓘ",
+        "legend": [
+          { "label": "步行", "icon": "walk" },
+          { "label": "地铁", "icon": "metro" },
+          { "label": "驾车", "icon": "drive" },
+          { "label": "打车", "icon": "taxi" }
+        ] },
+      { "type": "vertical-list", "title": "酒店排名",
+        "items": [
+          { "rank": 1, "name": "西湖隐念酒店", "modes": ["步行 13min","地铁 19min","驾车 5min"], "note": "市中心地段，闹中取静", "avg": "28 min" },
+          { "rank": 2, "name": "杭州君悦酒店", "modes": ["步行 8min","地铁 17min","驾车 7min"], "note": "近地铁，出行方便", "avg": "32 min" },
+          { "rank": 3, "name": "钱江新城万怡酒店", "modes": ["步行 28min","地铁 20min","驾车 8min"], "note": "步行偏远，建议地铁", "avg": "35 min" },
+          { "rank": 4, "name": "湖滨银泰之朵酒店", "modes": ["步行 7min","地铁 25min","驾车 10min"], "note": "紧邻商圈，打车友好", "avg": "38 min" },
+          { "rank": 5, "name": "杭州逸境酒店", "modes": ["步行 40min","驾车 15min"], "note": "距离较远，依赖打车自驾", "avg": "45 min" }
+        ] }
+    ],
+    "sheet": {
+      "type": "bottom-sheet",
+      "expanded_height": 96,
+      "drag_handle": false,
+      "expandable": true,
+      "z": 80,
+      "note": "与地图页共享的景点卡轮播，在排行榜页收起、只露出顶部一截",
+      "content": [
+        { "kind": "horizontal-list", "title": "景点卡（探头）",
+          "items": [
+            { "image_ref": "card-leifeng", "label": "雷峰塔" },
+            { "image_ref": "card-santan", "label": "三潭印月" },
+            { "image_ref": "card-duanqiao", "label": "断桥残雪" },
+            { "image_ref": "card-lingyin", "label": "灵隐寺" }
+          ] },
+        { "kind": "pager-dots", "count": 3, "active": 0 }
+      ]
+    }
+  }
+}

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小蜜 · 地图页（手绘按钮 + 字体对比）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=ZCOOL+XiaoWei&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet">
+<style>
+  :root{
+    --base:#f4e8c6; --paper:#fbf3da; --card:#fdf7e6;
+    --green:#6fa04a; --greenDk:#577f37; --gold:#f0cd6a; --orange:#df8a45;
+    --blue:#8fb8c4; --terra:#d98c5f; --ink:#4a3b26; --ink2:#7a6648;
+    --font:'LXGW WenKai','LXGW WenKai TC',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#e9ddbb;min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    padding:26px 16px 60px;
+    background-image:radial-gradient(50% 40% at 18% 8%,rgba(111,160,74,.28),transparent 70%),
+      radial-gradient(45% 40% at 88% 90%,rgba(223,138,69,.22),transparent 72%);}
+  h1{font-family:var(--font);font-size:19px;color:var(--ink);margin-bottom:3px}
+  .note{font-size:12.5px;color:#6a5a3c;margin-bottom:16px}
+
+  /* 字体切换 */
+  .fontbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
+  .fontbar button{font-family:var(--font);border:2px solid var(--ink);background:var(--paper);color:var(--ink);
+    padding:8px 14px;border-radius:16px 19px 15px 20px;font-size:13px;cursor:pointer;box-shadow:2px 3px 0 rgba(74,59,38,.18)}
+  .fontbar button.on{background:var(--green);color:#fff;border-color:var(--greenDk)}
+
+  /* 手机 */
+  .phone{width:390px;height:760px;border-radius:42px;background:#e7d9b3;padding:11px;position:relative;
+    box-shadow:0 36px 70px -30px rgba(80,62,30,.5), inset 0 0 0 1.5px rgba(255,255,255,.5)}
+  .screen{width:100%;height:100%;border-radius:32px;overflow:hidden;position:relative;display:flex;flex-direction:column;
+    background:var(--base);font-family:var(--font)}
+  /* 纸纹 */
+  .screen::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:30;opacity:.5;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E")}
+
+  /* 手绘元素：填充+描边画在 ::before 上并加抖动滤镜，文字在上层保持清晰 */
+  .hd{position:relative;z-index:1}
+  .hd>.in{position:relative;z-index:2}
+  .hd::before{content:"";position:absolute;inset:0;z-index:1;background:var(--fill,var(--paper));
+    border:2.5px solid var(--stroke,var(--ink));border-radius:var(--r,18px 22px 16px 21px);
+    filter:url(#rough);box-shadow:2px 3px 0 rgba(74,59,38,.16)}
+
+  /* 顶栏 */
+  .topbar{padding:26px 14px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;z-index:5}
+  .pill{--fill:var(--gold);--stroke:#b89534;--r:20px 24px 19px 23px;padding:8px 14px;font-size:14px;color:var(--ink);font-weight:700}
+  .nav{display:flex;gap:7px;margin-left:auto}
+  .nav .btn{--fill:var(--paper);--stroke:var(--ink);--r:16px 20px 15px 19px;padding:7px 13px;font-size:13.5px;color:var(--ink)}
+  .nav .btn.on{--fill:var(--green);--stroke:var(--greenDk);color:#fff}
+
+  /* 地图占位（先不管真地图）*/
+  .maparea{flex:1;margin:4px 14px 8px;position:relative;z-index:2;--fill:#dfe7cf;--stroke:#9bae7e;--r:26px 30px 24px 28px;
+    display:flex;align-items:center;justify-content:center}
+  .maparea .in{color:#7e8c63;font-size:14px;text-align:center;line-height:1.7}
+
+  /* 底部景点卡（纯色手绘卡，无图无图标）*/
+  .dock{padding:6px 12px 20px;position:relative;z-index:5}
+  .dock .hint{font-size:12px;color:#6a5a3c;margin-bottom:10px;padding-left:2px}
+  .cards{display:flex;gap:10px;align-items:flex-end;height:160px}
+  .acard{flex:1;height:128px;position:relative;z-index:1;cursor:pointer;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .acard.sel{transform:translateY(-22px);height:146px}
+  .acard::before{content:"";position:absolute;inset:0;z-index:1;background:var(--fill);border:3px solid var(--ink);
+    border-radius:var(--r,22px 26px 20px 24px);filter:url(#rough);box-shadow:2px 4px 0 rgba(74,59,38,.2)}
+  .acard .nm{position:absolute;z-index:2;left:0;right:0;bottom:12px;text-align:center;font-size:14px;font-weight:700;color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,.35)}
+  .acard.c1{--fill:var(--terra);--r:24px 20px 26px 19px}
+  .acard.c2{--fill:var(--green);--r:19px 25px 18px 24px}
+  .acard.c3{--fill:var(--blue);--r:25px 19px 24px 21px}
+  .acard.c4{--fill:var(--gold);--r:20px 24px 19px 26px}
+  .acard.c4 .nm{color:var(--ink);text-shadow:none}
+  .dots{display:flex;gap:6px;justify-content:center;margin-top:12px}
+  .dots i{width:7px;height:7px;border-radius:50%;background:#c3b48d}
+  .dots i.on{background:var(--orange);width:18px;border-radius:6px}
+</style>
+</head>
+<body>
+  <h1>小蜜 · 地图页</h1>
+  <div class="note">手绘纯色按钮（边缘抖动、无图无图标）· 地图区域先留空 · 点下方字体切换对比</div>
+
+  <div class="fontbar">
+    <button data-f="'LXGW WenKai','LXGW WenKai TC',sans-serif" class="on">A 霞鹜文楷</button>
+    <button data-f="'ZCOOL KuaiLe',sans-serif">B 站酷快乐体</button>
+    <button data-f="'Ma Shan Zheng',serif">C 马善政楷</button>
+    <button data-f="'ZCOOL XiaoWei',serif">D 站酷小薇</button>
+  </div>
+
+  <div class="phone">
+    <div class="screen">
+      <div class="topbar">
+        <div class="hd pill"><span class="in">📍 杭州 ▾</span></div>
+        <div class="nav">
+          <div class="hd btn on"><span class="in">地图</span></div>
+          <div class="hd btn"><span class="in">排行榜</span></div>
+          <div class="hd btn"><span class="in">设置</span></div>
+          <div class="hd btn"><span class="in">导入</span></div>
+        </div>
+      </div>
+
+      <div class="hd maparea"><span class="in">地图区域<br>（先留空，之后接真实地图）</span></div>
+
+      <div class="dock">
+        <div class="hint">已导入 3 家酒店 · 抽出你想去的景点（左右滑）</div>
+        <div class="cards">
+          <div class="acard c1"><span class="nm">雷峰塔</span></div>
+          <div class="acard c2 sel"><span class="nm">三潭印月</span></div>
+          <div class="acard c3"><span class="nm">断桥残雪</span></div>
+          <div class="acard c4"><span class="nm">灵隐寺</span></div>
+        </div>
+        <div class="dots"><i class="on"></i><i></i><i></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 手绘抖动滤镜 -->
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="rough">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" result="noise" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4.5"/>
+    </filter>
+  </svg>
+
+  <script>
+    document.querySelectorAll('.fontbar button').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.fontbar button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        document.documentElement.style.setProperty('--font', b.dataset.f);
+      });
+    });
+    // 点卡片上浮（演示）
+    document.querySelectorAll('.acard').forEach(c => c.addEventListener('click', () => c.classList.toggle('sel')));
+  </script>
+</body>
+</html>

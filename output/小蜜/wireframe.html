@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小蜜 · 界面拆分图 WIREFRAME</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font:13px/1.5 ui-monospace,Menlo,monospace;background:#1f2430;color:#e8ecf3;padding:24px}
+  h1{font-size:16px;margin-bottom:4px}
+  .sub{color:#9aa6b8;font-size:12px;margin-bottom:16px}
+  .banner{background:#11151f;border:1px solid #2c3445;border-radius:10px;padding:12px 14px;margin-bottom:20px}
+  .banner .line{font-size:12px;margin-bottom:8px}
+  .swatches{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .sw{display:flex;align-items:center;gap:5px;font-size:11px;color:#aeb8c8}
+  .sw i{width:18px;height:18px;border-radius:4px;display:inline-block;border:1px solid rgba(255,255,255,.2)}
+  .row{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .colcap{font-size:13px;color:#cfd8e6;font-weight:700}
+
+  .phone{width:390px;height:844px;position:relative;overflow:hidden;border-radius:30px;background:#0e1220;border:2px solid #313a4d}
+  .slot{position:absolute;border-width:3px;border-style:solid;border-radius:8px;padding:6px}
+  .tag{font-size:10px;font-weight:700;letter-spacing:.02em;opacity:.95;margin-bottom:4px}
+  .meta{font-size:9.5px;color:#cdd6e4;opacity:.8}
+
+  /* 色码 */
+  .statusbar{border-color:#94A3B8;background:rgba(148,163,184,.14)}
+  .header{border-color:#3B82F6;background:rgba(59,130,246,.14)}
+  .bg{border-color:#14B8A6;background:rgba(20,184,166,.12)}
+  .content{border-color:#6366F1;background:rgba(99,102,241,.12)}
+  .sec-title{border-color:#F59E0B;background:rgba(245,158,11,.14)}
+  .sec-vlist{border-color:#10B981;background:rgba(16,185,129,.12)}
+  .sheet{border-color:#F43F5E;background:rgba(244,63,94,.14)}
+  .floating{border-color:#F59E0B;background:rgba(245,158,11,.14)}
+
+  .navbtn{display:inline-block;border:1px dashed #3B82F6;border-radius:14px;padding:2px 8px;margin:2px 3px 0 0;font-size:10px}
+  .navbtn.on{background:#6FA04A;border-color:#6FA04A;color:#0e1220;font-weight:700}
+  .pill{display:inline-block;border:1px solid #EBC85C;background:rgba(235,200,92,.2);border-radius:12px;padding:2px 9px;font-size:10px}
+
+  .marker{position:absolute;transform:translate(-50%,-50%);font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;white-space:nowrap;border:1px solid #fff}
+  .marker.attr{background:#6FA04A;color:#fff}
+  .marker.hotel{background:#E0883C;color:#fff}
+
+  .asset{border:2px dashed #6B7280;background:repeating-linear-gradient(45deg,#222a38 0 8px,#2c3545 8px 16px);
+    padding:6px;border-radius:6px;font-size:9px;color:#e6ecf5}
+  .asset b{color:#ffd98a}
+  .aprompt{color:#9fb0c6;margin-top:2px;font-size:8.5px}
+
+  .cardrow{display:flex;gap:6px;height:120px;align-items:flex-end}
+  .card{flex:1;height:100px;position:relative}
+  .card.sel{height:120px}
+
+  .ranklist{display:flex;flex-direction:column;gap:7px}
+  .rcard{border:2px solid #10B981;background:rgba(16,185,129,.10);border-radius:8px;padding:6px 8px;font-size:10px}
+  .rcard .rh{display:flex;align-items:center;gap:6px}
+  .rbadge{background:#E0883C;color:#fff;font-weight:700;border-radius:6px;padding:1px 6px;font-size:10px}
+  .rname{font-weight:700;color:#dfe7f2}
+  .ravg{margin-left:auto;color:#E0883C;font-weight:700}
+  .modes{color:#9fb0c6;margin-top:3px;font-size:9px}
+  .note{color:#c79a6a;margin-top:2px;font-size:9px}
+
+  table{border-collapse:collapse;margin-top:18px;width:100%;max-width:920px;margin-left:auto;margin-right:auto;font-size:11px}
+  th,td{border:1px solid #2c3445;padding:5px 8px;text-align:left}
+  th{background:#11151f;color:#cfd8e6}
+  td.p{color:#9fb0c6}
+  .legend{margin-top:14px;font-size:11px;color:#9aa6b8;text-align:center}
+  .legend span{display:inline-block;margin:0 8px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:3px}
+</style>
+</head>
+<body>
+  <h1>小蜜 · 界面拆分图（WIREFRAME）</h1>
+  <div class="sub">UI Replicator · Step 3.5 结构确认 · 故意画得很糙，只看分层和定位对不对 · 暂不生成任何图片</div>
+
+  <div class="banner">
+    <div class="line">WIREFRAME · <b>小蜜（JourneyPlanner）</b> · 双屏 · <b>地图页</b> mode=canvas / <b>排行榜页</b> mode=feed · 共享顶栏 + 底部景点卡轮播 · <b>5 张图待生成</b></div>
+    <div class="swatches">
+      palette：
+      <span class="sw"><i style="background:#F5E9C8"></i>base</span>
+      <span class="sw"><i style="background:#FBF4DD"></i>surface</span>
+      <span class="sw"><i style="background:#6FA04A"></i>primary 绿</span>
+      <span class="sw"><i style="background:#E0883C"></i>accent 橙</span>
+      <span class="sw"><i style="background:#8FB8C4"></i>accent 蓝</span>
+      <span class="sw"><i style="background:#4A3B26"></i>ink</span>
+      &nbsp;&nbsp;fonts：ZCOOL KuaiLe + LXGW WenKai
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- ============ 屏A 地图页 canvas ============ -->
+    <div class="col">
+      <div class="colcap">屏 A · 地图页（canvas）— 小蜜1</div>
+      <div class="phone">
+        <!-- topbar -->
+        <div class="slot statusbar" style="top:0;left:0;right:0;height:26px;z-index:100">
+          <div class="tag">[topbar: status-bar] · 9:41</div>
+        </div>
+        <div class="slot header" style="top:26px;left:0;right:0;height:74px;z-index:100">
+          <div class="tag">[topbar: header] · 城市选择 + 导航</div>
+          <div><span class="pill">📍杭州 ▾</span>
+            <span class="navbtn on">地图●</span><span class="navbtn">排行榜</span>
+            <span class="navbtn">⚙设置</span><span class="navbtn">⬇导入</span></div>
+        </div>
+        <!-- background map -->
+        <div class="slot bg" style="top:100px;left:0;right:0;bottom:200px;z-index:0">
+          <div class="tag">[background: map-area] · base=map-base.png · 4 景点 pin + 3 酒店 pin（pin 是 UI，不生成图）</div>
+          <div class="asset" style="position:absolute;left:8px;right:8px;top:26px;bottom:8px;display:flex;align-items:center;justify-content:center">
+            <div><b>map-base.png</b> · 9:16 · map<div class="aprompt">俯视手绘城市地图，西湖在左，无任何文字/路名/数字</div></div>
+          </div>
+          <div class="marker attr" style="left:30%;top:70%">🟢雷峰塔</div>
+          <div class="marker attr" style="left:46%;top:56%">🟢三潭印月</div>
+          <div class="marker attr" style="left:54%;top:32%">🟢断桥残雪</div>
+          <div class="marker attr" style="left:22%;top:42%">🟢灵隐寺</div>
+          <div class="marker hotel" style="left:64%;top:50%">🟠酒店</div>
+          <div class="marker hotel" style="left:72%;top:68%">🟠酒店</div>
+          <div class="marker hotel" style="left:40%;top:82%">🟠酒店</div>
+        </div>
+        <!-- sheet -->
+        <div class="slot sheet" style="bottom:0;left:0;right:0;height:200px;z-index:80">
+          <div class="tag">[sheet: bottom-sheet] · expanded=200px · 景点卡轮播（左右滑，点选上浮）· pager dots</div>
+          <div class="cardrow">
+            <div class="card"><div class="asset" style="height:100%">♡<br><b>雷峰塔</b><div class="aprompt">card-leifeng 3:4</div></div></div>
+            <div class="card sel"><div class="asset" style="height:100%;border-color:#F43F5E">♡ 选中↑<br><b>三潭印月</b><div class="aprompt">card-santan 3:4</div></div></div>
+            <div class="card"><div class="asset" style="height:100%">♡<br><b>断桥残雪</b><div class="aprompt">card-duanqiao</div></div></div>
+            <div class="card"><div class="asset" style="height:100%">♡<br><b>灵隐寺</b><div class="aprompt">card-lingyin</div></div></div>
+          </div>
+          <div style="text-align:center;margin-top:6px;color:#caa;font-size:11px">● ○ ○</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 屏B 排行榜页 feed ============ -->
+    <div class="col">
+      <div class="colcap">屏 B · 排行榜页（feed）— 小蜜2</div>
+      <div class="phone">
+        <div class="slot statusbar" style="top:0;left:0;right:0;height:26px;z-index:100">
+          <div class="tag">[topbar: status-bar] · 9:41</div>
+        </div>
+        <div class="slot header" style="top:26px;left:0;right:0;height:74px;z-index:100">
+          <div class="tag">[topbar: header] · 同屏A，排行榜激活</div>
+          <div><span class="pill">📍杭州 ▾</span>
+            <span class="navbtn">地图</span><span class="navbtn on">排行榜●</span>
+            <span class="navbtn">⚙设置</span><span class="navbtn">⬇导入</span></div>
+        </div>
+        <!-- content feed -->
+        <div class="slot content" style="top:100px;left:0;right:0;bottom:96px;z-index:0;overflow:hidden">
+          <div class="tag">[content: feed] · 可滚动</div>
+          <div class="slot sec-title" style="position:static;margin:22px 0 8px">
+            <div class="tag">[content: title-row] · 标题 + 图例</div>
+            <div style="font-size:11px;color:#e8d8b0">🍯 酒店通勤时间排行榜 ⓘ</div>
+            <div style="font-size:9.5px;color:#9fb0c6;margin-top:3px">图例：🚶步行 🚇地铁 🚗驾车 🚕打车（UI 图标，不生成图）</div>
+          </div>
+          <div class="slot sec-vlist" style="position:static">
+            <div class="tag">[content: vertical-list] · 5 张酒店排名卡</div>
+            <div class="ranklist">
+              <div class="rcard"><div class="rh"><span class="rbadge">1</span><span class="rname">西湖隐念酒店</span><span class="ravg">28 min</span></div><div class="modes">🚶13 · 🚇19 · 🚗5</div><div class="note">市中心地段，闹中取静</div></div>
+              <div class="rcard"><div class="rh"><span class="rbadge">2</span><span class="rname">杭州君悦酒店</span><span class="ravg">32 min</span></div><div class="modes">🚶8 · 🚇17 · 🚗7</div><div class="note">近地铁，出行方便</div></div>
+              <div class="rcard"><div class="rh"><span class="rbadge">3</span><span class="rname">钱江新城万怡酒店</span><span class="ravg">35 min</span></div><div class="modes">🚶28 · 🚇20 · 🚗8</div><div class="note">步行偏远，建议地铁</div></div>
+              <div class="rcard"><div class="rh"><span class="rbadge">4</span><span class="rname">湖滨银泰之朵酒店</span><span class="ravg">38 min</span></div><div class="modes">🚶7 · 🚇25 · 🚗10</div><div class="note">紧邻商圈，打车友好</div></div>
+              <div class="rcard"><div class="rh"><span class="rbadge">5</span><span class="rname">杭州逸境酒店</span><span class="ravg">45 min</span></div><div class="modes">🚶40 · 🚗15</div><div class="note">距离较远，依赖打车自驾</div></div>
+            </div>
+          </div>
+        </div>
+        <!-- 共享 sheet 收起探头 -->
+        <div class="slot sheet" style="bottom:0;left:0;right:0;height:96px;z-index:80">
+          <div class="tag">[sheet: bottom-sheet 收起] · 同屏A的景点卡轮播，只露顶部一截 + dots</div>
+          <div class="cardrow" style="height:60px">
+            <div class="card" style="height:46px"><div class="asset" style="height:100%">雷峰塔</div></div>
+            <div class="card" style="height:46px"><div class="asset" style="height:100%">三潭印月</div></div>
+            <div class="card" style="height:46px"><div class="asset" style="height:100%">断桥残雪</div></div>
+            <div class="card" style="height:46px"><div class="asset" style="height:100%">灵隐寺</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    层级色码：
+    <span><i style="background:#94A3B8"></i>status-bar</span>
+    <span><i style="background:#3B82F6"></i>header</span>
+    <span><i style="background:#14B8A6"></i>background 地图</span>
+    <span><i style="background:#6366F1"></i>content feed</span>
+    <span><i style="background:#F59E0B"></i>title-row</span>
+    <span><i style="background:#10B981"></i>vertical-list</span>
+    <span><i style="background:#F43F5E"></i>sheet 景点卡</span>
+  </div>
+
+  <table>
+    <caption style="color:#cfd8e6;text-align:left;padding:8px 0;font-weight:700">待生成图片资产（5 张 · 两屏共享）</caption>
+    <tr><th>#</th><th>id</th><th>filename</th><th>aspect</th><th>role</th><th>prompt（截断）</th></tr>
+    <tr><td>1</td><td>map-base</td><td>map-base.png</td><td>9:16</td><td>map</td><td class="p">俯视手绘城市地图，西湖在左，无文字/路名/数字…</td></tr>
+    <tr><td>2</td><td>card-leifeng</td><td>card-leifeng.png</td><td>3:4</td><td>card</td><td class="p">雷峰塔，湖边山上的塔，手绘水粉，无文字…</td></tr>
+    <tr><td>3</td><td>card-santan</td><td>card-santan.png</td><td>3:4</td><td>card</td><td class="p">三潭印月，三座石塔立于湖中，远山…</td></tr>
+    <tr><td>4</td><td>card-duanqiao</td><td>card-duanqiao.png</td><td>3:4</td><td>card</td><td class="p">断桥，拱形石堤桥 + 柳树…</td></tr>
+    <tr><td>5</td><td>card-lingyin</td><td>card-lingyin.png</td><td>3:4</td><td>card</td><td class="p">灵隐寺，绿林环抱的古寺屋顶…</td></tr>
+  </table>
+  <div style="text-align:center;color:#9aa6b8;font-size:11px;margin-top:8px">
+    UI 元素（不生成图）：城市pill · 4 导航按钮 · 地图 pin · 交通图标 🚶🚇🚗🚕 · 排名徽章 · 爱心 · pager dots —— 全部 CSS/SVG
+  </div>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小蜜 · 顶栏（逐个可调）</title>
+<link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet">
+<style>
+  :root{ --base:#f4e8c6; --gold:#f1ce5f; --green:#8cb06a; --cream:#efe6cd; --blue:#9bbcd0;
+    --ink:#4a3b26; --font:'LXGW WenKai','LXGW WenKai TC',sans-serif; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#ece1bf;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:30px 16px;color:var(--ink)}
+  h1{font-size:18px;margin-bottom:4px}
+  .note{font-size:12.5px;color:#6a5a3c;margin-bottom:18px;text-align:center;max-width:430px;line-height:1.6}
+
+  .frame{width:390px;background:var(--base);border-radius:28px;padding:20px 14px;box-shadow:0 20px 46px -24px rgba(80,62,30,.5)}
+  .topbar{display:flex;align-items:center;gap:9px}
+
+  .pbtn{position:relative;border:none;background:none;cursor:pointer;font-family:var(--font);color:var(--ink);padding:0;flex-shrink:0}
+  .pbtn>svg.shape{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 3px 3px rgba(74,59,38,.18))}
+  .pbtn .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2}
+  .b-city{width:92px;height:58px}
+  .b-seg {width:122px;height:58px;margin-left:auto}
+  .b-set {width:50px;height:64px}
+  .b-imp {width:50px;height:64px}
+  .b-city .c{gap:5px;font-size:16px;font-weight:600}
+  .b-city img{height:19px}
+  .b-city .chev{font-size:10px;opacity:.6}
+  .stack{flex-direction:column;gap:3px}
+  .stack img{height:24px}
+  .stack .t{font-size:12px;font-weight:600}
+  .b-imp img{height:23px}
+  .b-seg .half{position:absolute;top:0;height:100%;width:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;z-index:2;cursor:pointer;--c:var(--ink)}
+  .b-seg .half.l{left:0} .b-seg .half.r{right:0}
+  .b-seg .half.active{--c:#fff}
+  .b-seg .half .t{font-size:12px;font-weight:600;color:var(--c)}
+  .b-seg .half .ic-map{width:24px;height:21px;background:var(--c);-webkit-mask:url(assets/icon-map.png) center/contain no-repeat;mask:url(assets/icon-map.png) center/contain no-repeat}
+  .b-seg .half .ic-bars{color:var(--c);display:flex}
+
+  /* 逐个控制面板 */
+  .panel{width:390px;margin-top:22px;background:#fbf4e0;border-radius:18px;padding:8px 14px;box-shadow:0 10px 26px -16px rgba(80,62,30,.4)}
+  .prow{display:flex;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid #ece0bf}
+  .prow:last-child{border-bottom:none}
+  .prow .pn{width:78px;font-size:13.5px;font-weight:600;color:var(--ink)}
+  .prow .roll{font-family:var(--font);border:none;background:var(--gold);color:var(--ink);padding:6px 11px;border-radius:9px;cursor:pointer;font-size:12.5px;box-shadow:0 2px 3px rgba(74,59,38,.2)}
+  .prow input{flex:1;accent-color:#df8a45}
+  .prow .v{width:30px;text-align:right;font-size:12.5px;color:#6a5a3c}
+</style>
+</head>
+<body>
+  <h1>小蜜 · 顶栏（每个按钮单独调）</h1>
+  <div class="note">上面看组装效果，下面每个按钮各有「↻随机」+「幅度」滑块，分开调，互不影响</div>
+
+  <div class="frame">
+    <div class="topbar">
+      <button class="pbtn b-city" data-i="0" data-fill="var(--gold)">
+        <svg class="shape" preserveAspectRatio="none"><path/></svg>
+        <span class="c"><img src="assets/icon-pin.png" alt=""><span>杭州</span><span class="chev">▾</span></span>
+      </button>
+      <button class="pbtn b-seg" data-i="1" data-seg="1">
+        <svg class="shape" preserveAspectRatio="none">
+          <defs><clipPath id="segclip"><path/></clipPath></defs>
+          <path class="bgfill"/>
+          <rect class="lhalf" x="0" y="0" width="50%" height="100%" fill="var(--green)" clip-path="url(#segclip)"/>
+        </svg>
+        <span class="half l active" data-side="map"><span class="ic-map"></span><span class="t">地图</span></span>
+        <span class="half r" data-side="rank">
+          <span class="ic-bars"><svg width="22" height="20" viewBox="0 0 22 20" fill="currentColor"><rect x="2" y="9" width="5" height="9" rx="1.5"/><rect x="9" y="4" width="5" height="14" rx="1.5"/><rect x="16" y="11" width="5" height="7" rx="1.5"/></svg></span>
+          <span class="t">排行榜</span>
+        </span>
+      </button>
+      <button class="pbtn b-set" data-i="2" data-fill="var(--cream)">
+        <svg class="shape" preserveAspectRatio="none"><path/></svg>
+        <span class="c stack"><img src="assets/icon-gear.png" alt=""><span class="t">设置</span></span>
+      </button>
+      <button class="pbtn b-imp" data-i="3" data-fill="var(--blue)">
+        <svg class="shape" preserveAspectRatio="none"><path/></svg>
+        <span class="c stack"><img src="assets/icon-download.png" alt=""><span class="t">导入</span></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel" id="panel"></div>
+  <button id="exp" style="margin-top:14px;font-family:var(--font);border:none;background:var(--green);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font-size:14px;box-shadow:0 3px 6px rgba(74,59,38,.25)">⬇ 导出（下载 JSON + 复制路径）</button>
+  <textarea id="out" style="width:390px;height:150px;margin-top:12px;font:11px/1.5 ui-monospace,Menlo,monospace;border:1px solid #d8c9a4;border-radius:10px;padding:10px;background:#fffdf6;color:#4a3b26;display:none"></textarea>
+
+  <script>
+    function rng(seed){let s=seed%233280;return()=>{s=(s*9301+49297)%233280;return s/233280;};}
+    function puffy(W,H,seed,amt){
+      const r=rng(seed),J=a=>(r()*2-1)*a,cj=amt,bj=amt*1.2,cc=amt*0.6,X=f=>f*W,Y=f=>f*H;
+      const A={p0:[X(.20),Y(.055)],p1:[X(.80),Y(.055)],p2:[X(.94),Y(.182)],p3:[X(.94),Y(.818)],
+               p4:[X(.80),Y(.945)],p5:[X(.20),Y(.945)],p6:[X(.06),Y(.818)],p7:[X(.06),Y(.182)]};
+      for(const k in A){A[k]=[A[k][0]+J(cj),A[k][1]+J(cj)];}
+      const cb=(fx,fy)=>[X(fx)+J(bj),Y(fy)+J(bj)], cn=(fx,fy)=>[X(fx)+J(cc),Y(fy)+J(cc)];
+      const t1=cb(.40,.009),t2=cb(.60,.009),r1=cb(.99,.364),r2=cb(.99,.636),b1=cb(.60,.991),b2=cb(.40,.991),
+            l1=cb(.01,.636),l2=cb(.01,.364),tr1=cn(.88,.073),tr2=cn(.92,.109),br1=cn(.92,.891),br2=cn(.88,.927),
+            bl1=cn(.12,.927),bl2=cn(.08,.891),tl1=cn(.08,.109),tl2=cn(.12,.073);
+      const f=p=>p[0].toFixed(1)+','+p[1].toFixed(1);
+      return `M${f(A.p0)} C${f(t1)} ${f(t2)} ${f(A.p1)} C${f(tr1)} ${f(tr2)} ${f(A.p2)} `
+           +`C${f(r1)} ${f(r2)} ${f(A.p3)} C${f(br1)} ${f(br2)} ${f(A.p4)} `
+           +`C${f(b1)} ${f(b2)} ${f(A.p5)} C${f(bl1)} ${f(bl2)} ${f(A.p6)} `
+           +`C${f(l1)} ${f(l2)} ${f(A.p7)} C${f(tl1)} ${f(tl2)} ${f(A.p0)} Z`;
+    }
+
+    const btns=[...document.querySelectorAll('.pbtn')];
+    const NAMES=['杭州','地图/排行榜','设置','导入'];
+    const state=btns.map(()=>({seed:Math.floor(Math.random()*99999),amt:3.5}));
+
+    function renderOne(i){
+      const btn=btns[i], st=state[i];
+      const w=btn.offsetWidth,h=btn.offsetHeight;
+      const vbW=w>=h?200:Math.round(200*w/h),vbH=w>=h?Math.round(200*h/w):200;
+      const svg=btn.querySelector('svg.shape');
+      svg.setAttribute('viewBox',`0 0 ${vbW} ${vbH}`);
+      const d=puffy(vbW,vbH,st.seed,st.amt);
+      svg.querySelectorAll('path').forEach(p=>p.setAttribute('d',d));
+      if(btn.dataset.fill) svg.querySelector('path').setAttribute('fill',btn.dataset.fill);
+      if(btn.dataset.seg) svg.querySelector('.bgfill').setAttribute('fill','var(--cream)');
+    }
+
+    // 控制面板
+    const panel=document.getElementById('panel');
+    btns.forEach((btn,i)=>{
+      const row=document.createElement('div'); row.className='prow';
+      row.innerHTML=`<span class="pn">${NAMES[i]}</span>
+        <button class="roll">↻ 随机</button>
+        <input type="range" min="0" max="8" step="0.5" value="${state[i].amt}">
+        <span class="v">${state[i].amt}</span>`;
+      const roll=row.querySelector('.roll'), slider=row.querySelector('input'), val=row.querySelector('.v');
+      roll.addEventListener('click',()=>{ state[i].seed=Math.floor(Math.random()*99999); renderOne(i); });
+      slider.addEventListener('input',()=>{ state[i].amt=+slider.value; val.textContent=slider.value; renderOne(i); });
+      panel.appendChild(row);
+    });
+
+    // 地图/排行榜 切换
+    const seg=document.querySelector('.b-seg'), rect=seg.querySelector('.lhalf');
+    seg.querySelectorAll('.half').forEach(half=>half.addEventListener('click',()=>{
+      seg.querySelectorAll('.half').forEach(h=>h.classList.remove('active'));
+      half.classList.add('active');
+      rect.setAttribute('x', half.dataset.side==='map'?'0':'50%');
+    }));
+
+    btns.forEach((_,i)=>renderOne(i));
+
+    // 导出：每个按钮的 seed/amt/viewBox/最终路径 d
+    document.getElementById('exp').addEventListener('click',()=>{
+      const data = btns.map((btn,i)=>{
+        const w=btn.offsetWidth,h=btn.offsetHeight;
+        const vbW=w>=h?200:Math.round(200*w/h),vbH=w>=h?Math.round(200*h/w):200;
+        return { name:NAMES[i], w, h, viewBox:`0 0 ${vbW} ${vbH}`,
+                 seed:state[i].seed, amt:state[i].amt,
+                 d: puffy(vbW,vbH,state[i].seed,state[i].amt) };
+      });
+      const json=JSON.stringify(data,null,2);
+      const out=document.getElementById('out'); out.style.display='block'; out.value=json; out.select();
+      try{ navigator.clipboard.writeText(json); }catch(e){}
+      const blob=new Blob([json],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='topbar-export.json'; a.click(); URL.revokeObjectURL(a.href);
+    });
+  </script>
+</body>
+</html>
