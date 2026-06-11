@@ -151,7 +151,7 @@ export default function Home() {
         const map = new AMap.Map(containerRef.current, {
           center: mapCenter,
           zoom: 13,
-          mapStyle: 'amap://styles/whitesmoke',
+          mapStyle: 'amap://styles/b61be196980fb631b8ab0740ad73682a',
         })
         mapRef.current = map
         setMapReady(n => n + 1)
@@ -160,7 +160,13 @@ export default function Home() {
           const marker = new AMap.Marker({
             position: [a.lng, a.lat],
             title: a.name,
-            label: { content: `<div class="text-xs bg-white px-1 rounded shadow">${a.name}</div>`, direction: 'top' },
+            content: `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
+              <div style="width:26px;height:26px;background:#4CAF7D;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(76,175,125,0.45);display:flex;align-items:center;justify-content:center">
+                <div style="width:10px;height:10px;background:white;border-radius:50%;transform:rotate(45deg)"></div>
+              </div>
+              <div style="background:white;color:#2d6a4a;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-top:3px;box-shadow:0 1px 5px rgba(0,0,0,0.15);white-space:nowrap">${a.name}</div>
+            </div>`,
+            offset: new AMap.Pixel(-13, -34),
           })
           marker.setMap(map)
         })
@@ -185,11 +191,13 @@ export default function Home() {
         const marker = new AMap.Marker({
           position: [hotel.lng, hotel.lat],
           title: hotel.name,
-          content: `<div style="display:flex;flex-direction:column;align-items:center">
-            <div style="background:#f97316;color:white;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25)">${hotel.name}</div>
-            <div style="width:10px;height:10px;background:#f97316;border-radius:50%;margin-top:3px;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></div>
+          content: `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
+            <div style="width:30px;height:30px;background:#E8524A;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(232,82,74,0.45);display:flex;align-items:center;justify-content:center">
+              <div style="width:12px;height:12px;background:white;border-radius:50%;transform:rotate(45deg)"></div>
+            </div>
+            <div style="background:white;color:#b03a35;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-top:3px;box-shadow:0 1px 5px rgba(0,0,0,0.15);white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis">${hotel.name}</div>
           </div>`,
-          offset: new AMap.Pixel(-40, -28),
+          offset: new AMap.Pixel(-15, -38),
         })
         marker.setMap(map)
         hotelMarkersRef.current.push(marker)
