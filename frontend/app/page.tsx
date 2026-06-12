@@ -7,6 +7,9 @@ const AMAP_KEY = 'f65273afda7993a2685b0337410b8777'
 const AMAP_SECRET = '028c0157e51b8eacd67d72d15161b634'
 const API_BASE = 'https://api.neiland.xyz'
 
+// 地图配色样式 ID（高德个性化地图后台用 public/amap-style.json 生成后，替换这里即可）
+const AMAP_STYLE = 'amap://styles/b61be196980fb631b8ab0740ad73682a'
+
 const XIAN_CENTER: [number, number] = [108.9398, 34.3416]
 
 const XIAN_ATTRACTIONS = [
@@ -18,12 +21,30 @@ const XIAN_ATTRACTIONS = [
   { id: '6', name: '回民街',     lng: 108.9340, lat: 34.2660 },
 ]
 
+// 小蜜鼓边按钮形状（从原型烤出的固定路径）
+const D_CITY = "M38.2,9.2 C77.7,-0.7 119.7,-0.0 161.4,4.3 C177.4,7.9 183.9,12.6 186.6,24.1 C199.1,42.8 196.5,76.6 186.1,102.3 C184.5,113.0 176.0,118.6 160.0,121.9 C119.4,124.7 81.6,128.0 40.7,119.6 C23.0,115.9 16.3,112.2 14.0,102.6 C0.4,78.1 -1.3,43.3 11.2,21.1 C17.3,14.9 25.3,10.1 38.2,9.2 Z"
+const D_SEG = "M42.7,4.2 C78.2,1.9 118.9,0.6 160.9,4.7 C176.2,7.6 184.3,11.5 190.3,17.2 C197.9,32.4 196.3,59.5 188.3,80.3 C184.6,84.7 175.0,89.6 158.6,91.5 C118.1,90.9 81.7,97.0 42.4,89.5 C24.2,87.0 17.3,83.1 12.4,76.0 C0.2,64.0 2.5,33.1 11.6,16.0 C14.7,11.8 24.1,6.7 42.7,4.2 Z"
+const D_SET = "M32.4,11.0 C63.7,1.0 91.1,1.8 125.0,13.2 C135.5,13.2 144.3,22.5 145.8,38.1 C155.4,76.4 156.8,123.5 144.5,164.4 C144.2,177.9 137.8,187.3 122.1,186.9 C92.5,201.8 59.7,201.9 32.1,186.1 C17.1,184.6 12.3,176.8 7.7,166.0 C0.3,126.1 -2.0,72.4 6.1,38.4 C11.0,22.2 20.7,14.9 32.4,11.0 Z"
+const D_IMP = "M28.7,8.8 C58.2,-0.0 95.1,-0.2 122.4,9.1 C136.1,12.9 145.3,20.4 145.6,33.6 C150.4,72.8 158.5,126.0 144.7,166.3 C142.0,177.1 138.5,186.2 125.2,189.3 C95.6,199.0 64.4,200.7 29.3,192.3 C18.9,185.6 11.1,177.0 10.2,165.7 C1.6,127.6 -1.7,69.8 11.0,38.9 C13.8,23.8 19.6,12.7 28.7,8.8 Z"
+const HEART_D = "M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"
+const SCENIC = ['🏞️','⛩️','🏯','🌅','🌉','🗼','🏝️','⛰️','🌸','🛕']
+// 比例条：步行段固定绿色；乘车段标签/颜色随当前模式
+const WALK_COLOR = '#6fa04a'
+const MODE_META: Record<string, { rideLabel: string; rideColor: string; speed: number; walkShare: number }> = {
+  transit: { rideLabel: '地铁', rideColor: '#5b86a6', speed: 20, walkShare: 0.25 },
+  driving: { rideLabel: '驾车', rideColor: '#e0883c', speed: 30, walkShare: 0 },
+  walking: { rideLabel: '',     rideColor: '#6fa04a', speed: 5,  walkShare: 1 },
+}
+
 interface Attraction {
   id: string
   name: string
   lng: number
   lat: number
 }
+
+// 一段通勤的耗时拆分（后端 /api/commute/matrix 返回）
+interface Leg { min: number; walk: number; ride: number }
 
 interface Warning { issue: string; severity: string; frequency: string; detail: string }
 interface HotelAnalysis {
@@ -61,6 +82,8 @@ export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null)
   const hotelMarkersRef = useRef<any[]>([])
   const uidRef = useRef<string>('')
+  const cardsRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef({ down: false, sx: 0, sl: 0, moved: false })
 
   const [tab, setTab] = useState<'map' | 'rank'>('map')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -78,7 +101,8 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false)
   const [cityInput, setCityInput] = useState('')
   const [commuteMode, setCommuteMode] = useState<'transit' | 'driving' | 'walking'>('transit')
-  const [commuteMatrix, setCommuteMatrix] = useState<Record<string, Record<string, number>>>({})
+  // 当前模式下 hotelId -> attrId -> {min, walk, ride}（min 总耗时；walk/ride 用于比例条）
+  const [commuteDetail, setCommuteDetail] = useState<Record<string, Record<string, Leg>>>({})
   const [matrixLoading, setMatrixLoading] = useState(false)
 
   // 从URL ?uid= 加载Bot收录的酒店、城市、已选景点（返回是否有待分析的酒店）
@@ -151,7 +175,7 @@ export default function Home() {
         const map = new AMap.Map(containerRef.current, {
           center: mapCenter,
           zoom: 13,
-          mapStyle: 'amap://styles/b61be196980fb631b8ab0740ad73682a',
+          mapStyle: AMAP_STYLE,
         })
         mapRef.current = map
         setMapReady(n => n + 1)
@@ -245,9 +269,8 @@ export default function Home() {
     setHotels(updated)
   }
 
-  const fetchCommuteMatrix = async (
-    hs: Hotel[], ats: Attraction[], mode: string, city: string
-  ) => {
+  // 拉当前模式的通勤矩阵（每格 {min, walk, ride}）
+  const fetchCommute = async (hs: Hotel[], ats: Attraction[], mode: string, city: string) => {
     const selectedAts = ats.filter(a => selected.has(a.id))
     if (hs.length === 0 || selectedAts.length === 0) return
     setMatrixLoading(true)
@@ -257,7 +280,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hotels: hs, attractions: selectedAts, mode, city }),
       }).then(r => r.json())
-      setCommuteMatrix(res.matrix || {})
+      setCommuteDetail(res.matrix || {})
     } catch {}
     setMatrixLoading(false)
   }
@@ -303,32 +326,123 @@ export default function Home() {
     mapRef.current?.setCenter([hotel.lng, hotel.lat])
   }
 
-  // Compute ranking based on selected attractions
+  // Compute ranking — 头条=去各景点平均耗时；比例条=当前模式下 步行 vs 乘车 的时间占比
   const ranking = useMemo(() => {
     if (hotels.length === 0 || selected.size === 0) return []
     const targets = attractions.filter(a => selected.has(a.id))
-    const hasMatrix = Object.keys(commuteMatrix).length > 0
+    const meta = MODE_META[commuteMode] ?? MODE_META.transit
     return hotels
       .map(h => {
-        const times = targets.map(a => {
-          if (hasMatrix && commuteMatrix[h.id]?.[a.id] != null)
-            return commuteMatrix[h.id][a.id]
-          return toMinutes(distanceKm(h.lat, h.lng, a.lat, a.lng))
+        let sumMin = 0, sumWalk = 0, sumRide = 0
+        targets.forEach(a => {
+          const cell = commuteDetail[h.id]?.[a.id]
+          if (cell && typeof cell.min === 'number') {
+            sumMin += cell.min; sumWalk += cell.walk; sumRide += cell.ride
+          } else {
+            // 无真实数据时按直线估算 + 模式步行占比
+            const est = Math.round(distanceKm(h.lat, h.lng, a.lat, a.lng) / meta.speed * 60)
+            sumMin += est; sumWalk += est * meta.walkShare; sumRide += est * (1 - meta.walkShare)
+          }
         })
-        const avg = Math.round(times.reduce((s, t) => s + t, 0) / times.length)
-        return { hotel: h, avg, times, targets }
+        const avg = Math.round(sumMin / targets.length)
+        const denom = sumWalk + sumRide || 1
+        const walkPct = Math.round(sumWalk / denom * 100)
+        const bar: { label: string; color: string; pct: number }[] = []
+        if (walkPct > 0) bar.push({ label: '步行', color: WALK_COLOR, pct: walkPct })
+        if (walkPct < 100 && meta.rideLabel) bar.push({ label: meta.rideLabel, color: meta.rideColor, pct: 100 - walkPct })
+        if (bar.length === 0) bar.push({ label: '步行', color: WALK_COLOR, pct: 100 })
+        return { hotel: h, avg, bar }
       })
       .sort((a, b) => a.avg - b.avg)
-  }, [hotels, selected, commuteMatrix])
+  }, [hotels, selected, commuteDetail, commuteMode])
 
   const selectedAttractions = attractions.filter(a => selected.has(a.id))
+  const hasHighWarning = hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高'))
 
-  // 选中景点或通勤模式变化时重新拉取真实路线
+  // 选中景点 / 模式 / 酒店变化时，重新拉取当前模式的路线
   useEffect(() => {
     if (selected.size > 0 && hotels.length > 0) {
-      fetchCommuteMatrix(hotels, attractions, commuteMode, cityName)
+      fetchCommute(hotels, attractions, commuteMode, cityName)
     }
   }, [selected, commuteMode, hotels])
+
+  // 底部扇形景点卡：弧线 + 拖拽 + 滚轮横滑（命令式，避免每次 selected 变化重挂）
+  useEffect(() => {
+    const cards = cardsRef.current
+    if (!cards) return
+    const items = () => Array.from(cards.querySelectorAll('.acard')) as HTMLElement[]
+    const arc = () => {
+      const center = cards.scrollLeft + cards.clientWidth / 2
+      const span = cards.clientWidth * 0.42
+      for (const card of items()) {
+        const cc = card.offsetLeft + card.offsetWidth / 2
+        const d = Math.max(-1.4, Math.min(1.4, (cc - center) / span))
+        const dd = Math.min(1, d * d)
+        const lift = -(1 - dd) * 24   // 中间卡上抬，两侧归位（不向下越界，避免被裁）
+        card.style.transform =
+          `translateY(${lift.toFixed(1)}px) rotate(${(d * 11).toFixed(2)}deg) scale(${(1 - Math.abs(d) * 0.08).toFixed(3)})`
+      }
+    }
+    let raf = 0
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; arc(); updateDots() }) }
+    const ds = dragRef.current
+    const onDown = (e: PointerEvent) => {
+      ds.down = true; ds.moved = false; ds.sx = e.clientX; ds.sl = cards.scrollLeft
+    }
+    const onMove = (e: PointerEvent) => {
+      if (!ds.down) return
+      const dx = e.clientX - ds.sx
+      if (!ds.moved && Math.abs(dx) > 4) {
+        // 越过阈值才认定为拖拽：此时才捕获指针（纯点击不捕获，click 才能落到卡片）
+        ds.moved = true
+        cards.classList.add('dragging')
+        cards.setPointerCapture?.(e.pointerId)
+      }
+      if (ds.moved) cards.scrollLeft = ds.sl - dx
+    }
+    const endDrag = (e: PointerEvent) => {
+      if (!ds.down) return
+      ds.down = false; cards.classList.remove('dragging')
+      try { cards.releasePointerCapture?.(e.pointerId) } catch {}
+      const center = cards.scrollLeft + cards.clientWidth / 2
+      let best: HTMLElement | null = null, bd = Infinity
+      for (const c of items()) {
+        const dd = Math.abs(c.offsetLeft + c.offsetWidth / 2 - center)
+        if (dd < bd) { bd = dd; best = c }
+      }
+      if (best) cards.scrollTo({ left: best.offsetLeft + best.offsetWidth / 2 - cards.clientWidth / 2, behavior: 'smooth' })
+      setTimeout(() => { ds.moved = false }, 0)
+    }
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { cards.scrollLeft += e.deltaY; e.preventDefault() }
+    }
+    const dotsEl = cards.parentElement?.querySelector('.xm-dots') as HTMLElement | null
+    const PAGES = Math.min(5, items().length)
+    if (dotsEl) { dotsEl.innerHTML = ''; for (let i = 0; i < PAGES; i++) dotsEl.appendChild(document.createElement('i')) }
+    const updateDots = () => {
+      if (!dotsEl) return
+      const max = cards.scrollWidth - cards.clientWidth
+      const p = max > 0 ? Math.round(cards.scrollLeft / max * (PAGES - 1)) : 0
+      dotsEl.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === p))
+    }
+    cards.addEventListener('scroll', onScroll, { passive: true })
+    cards.addEventListener('pointerdown', onDown)
+    cards.addEventListener('pointermove', onMove)
+    cards.addEventListener('pointerup', endDrag)
+    cards.addEventListener('pointercancel', endDrag)
+    cards.addEventListener('wheel', onWheel, { passive: false })
+    window.addEventListener('resize', arc)
+    requestAnimationFrame(() => { arc(); updateDots() })
+    return () => {
+      cards.removeEventListener('scroll', onScroll)
+      cards.removeEventListener('pointerdown', onDown)
+      cards.removeEventListener('pointermove', onMove)
+      cards.removeEventListener('pointerup', endDrag)
+      cards.removeEventListener('pointercancel', endDrag)
+      cards.removeEventListener('wheel', onWheel)
+      window.removeEventListener('resize', arc)
+    }
+  }, [attractions])
 
   const CITIES = [
     '北京','上海','广州','深圳','成都','杭州','西安','重庆','南京','武汉',
@@ -354,7 +468,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--base)' }}>
+    <div className="flex flex-col h-screen relative overflow-hidden mx-auto w-full" style={{ background: 'var(--base)', maxWidth: 480 }}>
       {/* City picker modal */}
       {showCityPicker && (
         <div className="absolute inset-0 bg-black/50 z-50 flex flex-col">
@@ -396,53 +510,53 @@ export default function Home() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--cream)' }}>
-        <button
-          onClick={() => setShowCityPicker(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors"
-          style={{ background: 'var(--cream)', color: 'var(--ink)' }}
-        >
-          <span className="text-sm">📍</span>
-          <span className="font-bold text-sm">{cityName}</span>
-          <span className="text-xs" style={{ color: 'var(--ink-mid)' }}>切换 ▾</span>
-        </button>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-full p-0.5 text-sm" style={{ background: 'var(--cream)' }}>
-            <button
-              onClick={() => setTab('map')}
-              className="px-3 py-1 rounded-full transition-colors"
-              style={tab === 'map' ? { background: 'var(--primary)', color: '#fff', fontWeight: 600 } : { color: 'var(--ink-mid)' }}
-            >地图</button>
-            <button
-              onClick={() => setTab('rank')}
-              className="px-3 py-1 rounded-full transition-colors"
-              style={tab === 'rank' ? { background: 'var(--primary)', color: '#fff', fontWeight: 600 } : { color: 'var(--ink-mid)' }}
-            >排行榜</button>
-          </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="text-sm px-3 py-1 rounded-full"
-            style={{ background: 'var(--cream)', color: 'var(--ink)' }}
-            title="通勤偏好"
-          >⚙</button>
+      {/* Header — 小蜜鼓边顶栏 */}
+      <div className="px-3 py-2.5" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--cream)' }}>
+        <div className="xm-topbar">
+          {/* 城市 */}
+          <button className="pbtn b-city" onClick={() => setShowCityPicker(true)}>
+            <svg className="shape" viewBox="0 0 200 126" preserveAspectRatio="none"><path fill="var(--gold)" d={D_CITY} /></svg>
+            <span className="c"><img src="/icons/icon-pin.png" alt="" /><span>{cityName}</span><span className="chev">▾</span></span>
+          </button>
+
+          {/* 地图 / 排行榜 分段 */}
+          <button className="pbtn b-seg" aria-label="切换地图与排行榜">
+            <svg className="shape" viewBox="0 0 200 95" preserveAspectRatio="none">
+              <defs><clipPath id="xm-segclip"><path d={D_SEG} /></clipPath></defs>
+              <path fill="var(--cream)" d={D_SEG} />
+              <rect x={tab === 'map' ? '0' : '50%'} y="0" width="50%" height="100%" fill="var(--primary)" clipPath="url(#xm-segclip)" style={{ transition: 'x .25s ease' }} />
+            </svg>
+            <span className={`half l${tab === 'map' ? ' active' : ''}`} onClick={() => setTab('map')}>
+              <span className="ic-map" /><span className="t">地图</span>
+            </span>
+            <span className={`half r${tab === 'rank' ? ' active' : ''}`} onClick={() => setTab('rank')}>
+              <span className="ic-bars"><svg width="20" height="18" viewBox="0 0 22 20" fill="currentColor"><rect x="2" y="9" width="5" height="9" rx="1.5" /><rect x="9" y="4" width="5" height="14" rx="1.5" /><rect x="16" y="11" width="5" height="7" rx="1.5" /></svg></span>
+              <span className="t">排行榜</span>
+            </span>
+          </button>
+
+          {/* 设置 */}
+          <button className="pbtn b-set" onClick={() => setShowSettings(true)} title="通勤偏好">
+            <svg className="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill="var(--cream)" d={D_SET} /></svg>
+            <span className="c stack"><img src="/icons/icon-gear.png" alt="" /><span className="t">设置</span></span>
+          </button>
+
+          {/* 酒店管理（有酒店时） */}
           {hotels.length > 0 && (
-            <button
-              onClick={() => setShowHotelManager(true)}
-              className="text-sm px-3 py-1 rounded-full"
-              style={hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高'))
-                ? { background: '#e05a4a', color: '#fff' }
-                : { background: 'var(--cream)', color: 'var(--ink)' }}
-            >
-              {hotels.some(h => h.analysis?.summary?.warnings.some(w => w.severity === '高')) ? '⚠ ' : ''}
-              酒店 {hotels.length}
+            <button className="pbtn b-set" onClick={() => setShowHotelManager(true)} title="候选酒店">
+              <svg className="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill={hasHighWarning ? '#e05a4a' : 'var(--cream)'} d={D_SET} /></svg>
+              <span className="c stack">
+                <span style={{ fontSize: 19, lineHeight: 1 }}>{hasHighWarning ? '⚠️' : '🏨'}</span>
+                <span className="t" style={hasHighWarning ? { color: '#fff' } : undefined}>酒店{hotels.length}</span>
+              </span>
             </button>
           )}
-          <button
-            onClick={() => setShowSearch(true)}
-            className="text-sm px-3 py-1 rounded-full text-white"
-            style={{ background: 'var(--accent)' }}
-          >+ 添加酒店</button>
+
+          {/* 导入 / 添加酒店 */}
+          <button className="pbtn b-imp" onClick={() => setShowSearch(true)} title="添加酒店">
+            <svg className="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill="var(--blue)" d={D_IMP} /></svg>
+            <span className="c stack"><img src="/icons/icon-download.png" alt="" /><span className="t">导入</span></span>
+          </button>
         </div>
       </div>
 
@@ -503,7 +617,7 @@ export default function Home() {
               ] as const).map(({ mode, icon, label, desc }) => (
                 <button
                   key={mode}
-                  onClick={() => { setCommuteMode(mode); setCommuteMatrix({}) }}
+                  onClick={() => setCommuteMode(mode)}
                   className="w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-colors"
                   style={commuteMode === mode
                     ? { borderColor: 'var(--accent)', background: '#fdf3e7' }
@@ -593,7 +707,7 @@ export default function Home() {
 
       {/* Ranking */}
       {tab === 'rank' && (
-        <div className="flex-1 overflow-y-auto px-4 py-3" style={{ background: 'var(--base)' }}>
+        <div className="flex-1 overflow-y-auto px-4 py-3" style={{ background: 'var(--base)', paddingBottom: 180 }}>
           {selected.size === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-sm" style={{ color: 'var(--ink-mid)' }}>
               <p>选择想去的景点</p>
@@ -606,88 +720,96 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <p className="text-xs mb-3 flex items-center gap-1" style={{ color: 'var(--ink-mid)' }}>
+              {/* 标题行 */}
+              <div className="flex items-center gap-2 mb-1">
+                <span style={{ fontSize: 18 }}>👑</span>
+                <h1 className="font-bold" style={{ fontSize: 16, color: 'var(--ink)' }}>酒店通勤时间排行榜</h1>
+              </div>
+              <p className="text-xs mb-3 flex items-center gap-1 flex-wrap" style={{ color: 'var(--ink-mid)' }}>
                 {matrixLoading
                   ? <span className="animate-pulse" style={{ color: 'var(--accent)' }}>⏳ 正在计算真实路线...</span>
                   : <>
-                      {Object.keys(commuteMatrix).length > 0
+                      {Object.keys(commuteDetail).length > 0
                         ? { transit: '🚇 公共交通', driving: '🚗 驾车', walking: '🚶 步行' }[commuteMode]
                         : '📐 直线估算（选景点后自动更新）'
                       }
-                      · 已选 {selected.size} 个景点
+                      · 已选 {selected.size} 个景点 · 条形=步行/乘车 时间占比
                     </>
                 }
               </p>
-              {ranking.map((item, i) => (
-                <div key={item.hotel.id} className="rounded-2xl p-4 mb-3" style={{ background: 'var(--surface)', boxShadow: '0 2px 8px rgba(74,59,38,0.08)' }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-bold w-6 text-center" style={{ color: i === 0 ? '#d4a017' : i === 1 ? '#8a7550' : i === 2 ? 'var(--accent)' : 'var(--ink-mid)' }}>
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium text-sm" style={{ color: 'var(--ink)' }}>{item.hotel.name}</span>
-                      {item.hotel.analysis?.amap_rating && (
-                        <span className={`ml-2 text-xs font-bold ${item.hotel.analysis.amap_rating >= 4.5 ? 'text-green-600' : item.hotel.analysis.amap_rating >= 4.0 ? 'text-yellow-600' : 'text-red-500'}`}>
-                          ★{item.hotel.analysis.amap_rating}
+              {ranking.map((item, i) => {
+                const a = item.hotel.analysis
+                const rating = a?.amap_rating ?? null
+                const rateColor = rating == null ? '' : rating >= 4.5 ? '#4a9a55' : rating >= 4.0 ? '#d08a2c' : '#d04a3c'
+                const warnings = a?.summary?.warnings ?? []
+                const verdict = a?.summary?.verdict
+                const pending = !a || (a.amap_rating == null && !a.summary)
+                return (
+                  <div key={item.hotel.id} className="xm-rcard">
+                    <div className="xm-rtop">
+                      <span className="xm-rbadge" style={{
+                        background: i === 0 ? 'var(--gold)' : i === 1 ? '#d9c7a0' : i === 2 ? '#e2b48a' : 'var(--cream)',
+                        color: i === 0 ? '#7a5a14' : i === 1 ? '#6b5a36' : i === 2 ? '#6e4526' : 'var(--ink-mid)',
+                      }}>{i + 1}</span>
+                      <span className="xm-rname">{item.hotel.name}</span>
+                      <div className="xm-ravg"><div className="lab">平均通勤</div><div className="big">{item.avg}<span>min</span></div></div>
+                      <button onClick={() => removeHotel(item.hotel.id)} className="text-xs text-red-400 ml-1">✕</button>
+                    </div>
+                    <div className="xm-rbar">
+                      {item.bar.map((seg, j) => (
+                        <span key={j} className="xm-seg" title={`${seg.label} ${seg.pct}%`}
+                          style={{ flex: seg.pct || 0.01, background: seg.color }}>
+                          {seg.pct >= 15 ? `${seg.label} ${seg.pct}%` : `${seg.pct}%`}
                         </span>
-                      )}
-                      {item.hotel.analysis?.summary?.warnings.filter(w => w.severity === '高').map((w, i) => (
-                        <span key={i} title={w.detail} className="ml-1 text-xs px-1.5 rounded bg-red-100 text-red-600">⚠ {w.issue}</span>
                       ))}
                     </div>
-                    <span className="font-bold text-sm" style={{ color: 'var(--accent)' }}>均 {item.avg} 分钟</span>
-                    <button onClick={() => removeHotel(item.hotel.id)} className="ml-2 text-xs text-red-400">✕</button>
+                    <div className="xm-rwarn">
+                      {rating != null && <span className="xm-rate" style={{ color: rateColor }}>★ {rating}</span>}
+                      {warnings.slice(0, 3).map((w, k) => (
+                        <span key={k} title={w.detail} className={`xm-wtag ${w.severity === '高' ? 'hi' : w.severity === '中' ? 'mid' : 'lo'}`}>
+                          ⚠ {w.issue}{w.frequency === '个别提到' ? '（少数）' : ''}
+                        </span>
+                      ))}
+                      {pending
+                        ? <span className="xm-verdict animate-pulse">⏳ 正在分析避雷信息…</span>
+                        : verdict
+                          ? <span className={`xm-verdict${warnings.length === 0 ? ' clean' : ''}`}>{warnings.length === 0 ? '✓ ' : ''}{verdict}</span>
+                          : (warnings.length === 0 && rating != null
+                              ? <span className="xm-verdict clean">✓ 暂无明显雷点</span>
+                              : null)}
+                    </div>
                   </div>
-                  <div className="ml-8 space-y-1">
-                    {item.targets.map((a, j) => (
-                      <div key={a.id} className="flex justify-between text-xs" style={{ color: 'var(--ink-mid)' }}>
-                        <span>{a.name}</span>
-                        <span>{item.times[j]} 分钟</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </>
           )}
         </div>
       )}
 
-      {/* Bottom wave tray — attraction selector */}
-      <div className="relative" style={{ zIndex: 10 }}>
-        {/* 波浪 SVG */}
-        <svg
-          viewBox="0 0 390 48"
-          preserveAspectRatio="none"
-          className="w-full block"
-          style={{ height: 48, marginBottom: -1, filter: 'drop-shadow(0 -2px 4px rgba(120,100,60,0.10))' }}
-        >
-          <path
-            d="M0,28 C60,10 110,4 170,18 C210,28 250,36 305,22 C335,14 362,12 390,20 L390,48 L0,48 Z"
-            fill="var(--surface)"
-          />
-        </svg>
-        <div className="px-3 pb-4 pt-0" style={{ background: 'var(--surface)' }}>
-          <p className="text-xs mb-2" style={{ color: 'var(--ink-mid)' }}>
-            {hotels.length > 0 ? `已导入 ${hotels.length} 家酒店 · ` : ''}抽出你想去的景点
-          </p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {attractions.map(a => (
-              <button
+      {/* Bottom 浮层底板 — 盖在地图上，卡牌可探出 */}
+      <div className="xm-dock">
+        {/* 底板背景（波浪上沿 + 实底） */}
+        <div className="xm-tray-bg">
+          <svg viewBox="0 0 390 188" preserveAspectRatio="none">
+            <path d="M0,30 C60,12 110,6 170,20 C210,30 250,38 305,24 C335,16 362,14 390,22 L390,188 L0,188 Z" fill="var(--surface)" />
+          </svg>
+        </div>
+        {/* 卡牌（z 在底板之上，可探出） */}
+        <div className="xm-dock-inner">
+          <div className="xm-cards" ref={cardsRef}>
+            {attractions.map((a, i) => (
+              <div
                 key={a.id}
-                onClick={() => toggleSelect(a.id)}
-                className="flex-shrink-0 px-3 py-2 rounded-full text-sm font-medium transition-colors"
-                style={selected.has(a.id)
-                  ? { background: 'var(--primary)', color: '#fff' }
-                  : { background: 'var(--cream)', color: 'var(--ink-mid)' }}
+                className={`acard${selected.has(a.id) ? ' liked' : ''}`}
+                onClick={() => { if (!dragRef.current.moved) toggleSelect(a.id) }}
               >
-                {a.name}
-              </button>
+                <span className="heart"><svg viewBox="0 0 24 24"><path d={HEART_D} /></svg></span>
+                <div className="pic">{SCENIC[i % SCENIC.length]}</div>
+                <div className="ttl"><span className="pin">📍</span>{a.name}</div>
+              </div>
             ))}
           </div>
-          {selected.size > 0 && (
-            <p className="text-xs mt-2" style={{ color: 'var(--accent)' }}>已选 {selected.size} 个景点</p>
-          )}
+          <div className="xm-dots" />
         </div>
       </div>
     </div>

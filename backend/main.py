@@ -101,6 +101,10 @@ def migrate_db():
         if "selected_attractions" not in user_cols:
             conn.execute("ALTER TABLE users ADD COLUMN selected_attractions TEXT DEFAULT '[]'")
             print("DB migration: added selected_attractions column to users")
+        rc_cols = [r[1] for r in conn.execute("PRAGMA table_info(route_cache)").fetchall()]
+        if "walk" not in rc_cols:
+            conn.execute("ALTER TABLE route_cache ADD COLUMN walk REAL DEFAULT 0")
+            print("DB migration: added walk column to route_cache")
         conn.commit()
 
 migrate_db()
@@ -1285,24 +1289,25 @@ def _route_cache_key(olat, olng, dlat, dlng, mode: str) -> str:
     # 坐标精度保留4位，避免微小差异导致缓存miss
     return f"{round(olat,4)},{round(olng,4)}-{round(dlat,4)},{round(dlng,4)}-{mode}"
 
-def _get_cached(key: str) -> float | None:
+def _get_cached(key: str):
+    """返回 (minutes, walk) 或 None"""
     with get_db() as conn:
         row = conn.execute(
-            "SELECT minutes FROM route_cache WHERE cache_key=? AND created_at > datetime('now', ?)",
+            "SELECT minutes, walk FROM route_cache WHERE cache_key=? AND created_at > datetime('now', ?)",
             (key, f"-{CACHE_TTL_HOURS} hours")
         ).fetchone()
-    return row[0] if row else None
+    return (row[0], row[1] or 0) if row else None
 
-def _set_cached(key: str, minutes: float):
+def _set_cached(key: str, minutes: float, walk: float = 0):
     with get_db() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO route_cache (cache_key, minutes) VALUES (?, ?)",
-            (key, minutes)
+            "INSERT OR REPLACE INTO route_cache (cache_key, minutes, walk) VALUES (?, ?, ?)",
+            (key, minutes, walk)
         )
         conn.commit()
 
-def amap_transit_minutes(olat, olng, dlat, dlng, city: str) -> float | None:
-    """高德公共交通路线，返回分钟数"""
+def amap_transit_detail(olat, olng, dlat, dlng, city: str):
+    """高德公共交通路线，返回 (总分钟, 步行分钟)。步行从各分段的 walking.duration 累加。"""
     try:
         r = requests.get("https://restapi.amap.com/v3/direction/transit/integrated", params={
             "key": AMAP_WEB_KEY,
@@ -1314,10 +1319,16 @@ def amap_transit_minutes(olat, olng, dlat, dlng, city: str) -> float | None:
         }, timeout=8).json()
         plans = r.get("route", {}).get("transits", [])
         if plans:
-            return round(int(plans[0].get("duration", 0)) / 60, 1)
+            plan = plans[0]
+            total = int(plan.get("duration", 0) or 0)
+            walk = 0
+            for seg in plan.get("segments", []):
+                w = seg.get("walking") or {}
+                walk += int(w.get("duration", 0) or 0)
+            return round(total / 60, 1), round(walk / 60, 1)
     except Exception as e:
         print("amap_transit error:", e)
-    return None
+    return None, 0.0
 
 def amap_driving_minutes(olat, olng, dlat, dlng) -> float | None:
     """高德驾车路线，返回分钟数"""
@@ -1352,20 +1363,29 @@ def amap_walking_minutes(olat, olng, dlat, dlng) -> float | None:
         print("amap_walking error:", e)
     return None
 
-def get_route_minutes(olat, olng, dlat, dlng, mode: str, city: str = "") -> float:
-    """获取两点间通勤时间（分钟），优先读缓存"""
+def get_route_detail(olat, olng, dlat, dlng, mode: str, city: str = "") -> dict:
+    """获取两点间通勤时间拆分（分钟），优先读缓存。
+    返回 {"min": 总耗时, "walk": 步行耗时, "ride": 乘车/驾车耗时}。
+    - transit: walk=路线里步行段时间, ride=其余（地铁/公交/等车）
+    - driving: walk=0, ride=总时间
+    - walking: walk=总时间, ride=0
+    """
     key = _route_cache_key(olat, olng, dlat, dlng, mode)
     cached = _get_cached(key)
     if cached is not None:
-        return cached
+        minutes, walk = cached
+        return {"min": minutes, "walk": walk, "ride": round(max(0.0, minutes - walk), 1)}
 
     minutes = None
+    walk = 0.0
     if mode == "transit":
-        minutes = amap_transit_minutes(olat, olng, dlat, dlng, city)
+        minutes, walk = amap_transit_detail(olat, olng, dlat, dlng, city)
     elif mode == "driving":
         minutes = amap_driving_minutes(olat, olng, dlat, dlng)
+        walk = 0.0
     elif mode == "walking":
         minutes = amap_walking_minutes(olat, olng, dlat, dlng)
+        walk = minutes if minutes is not None else None
 
     if minutes is None:
         # fallback: 直线距离估算
@@ -1377,9 +1397,19 @@ def get_route_minutes(olat, olng, dlat, dlng, mode: str, city: str = "") -> floa
         km = R * 2 * atan2(sqrt(a), sqrt(1-a))
         speed = {"transit": 20, "driving": 30, "walking": 5}.get(mode, 20)
         minutes = round(km / speed * 60, 1)
+        if mode == "walking":
+            walk = minutes
+        elif mode == "transit":
+            walk = round(minutes * 0.25, 1)   # 估算：约 1/4 时间在步行
+        else:
+            walk = 0.0
 
-    _set_cached(key, minutes)
-    return minutes
+    _set_cached(key, minutes, walk)
+    return {"min": minutes, "walk": walk, "ride": round(max(0.0, minutes - walk), 1)}
+
+# 兼容旧调用：只要总分钟数
+def get_route_minutes(olat, olng, dlat, dlng, mode: str, city: str = "") -> float:
+    return get_route_detail(olat, olng, dlat, dlng, mode, city)["min"]
 
 @app.post("/api/commute/matrix")
 async def commute_matrix(body: dict):
@@ -1391,7 +1421,10 @@ async def commute_matrix(body: dict):
       mode: "transit" | "driving" | "walking",
       city: "北京"
     }
-    返回: {matrix: {hotel_id: {attraction_id: minutes}}}
+    返回: {matrix: {hotel_id: {attraction_id: {min, walk, ride}}}}
+      min  = 总耗时（分钟）
+      walk = 步行段耗时
+      ride = 乘车/驾车段耗时（min - walk）
     """
     hotels = body.get("hotels", [])
     attractions = body.get("attractions", [])
@@ -1401,8 +1434,9 @@ async def commute_matrix(body: dict):
     for h in hotels:
         matrix[h["id"]] = {}
         for a in attractions:
-            m = get_route_minutes(h["lat"], h["lng"], a["lat"], a["lng"], mode, city)
-            matrix[h["id"]][a["id"]] = m
+            matrix[h["id"]][a["id"]] = get_route_detail(
+                h["lat"], h["lng"], a["lat"], a["lng"], mode, city
+            )
     return {"matrix": matrix}
 
 @app.get("/api/poi/search")

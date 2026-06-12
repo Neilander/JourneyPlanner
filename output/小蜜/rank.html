@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小蜜 · 排行榜页</title>
+<link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet">
+<style>
+  :root{
+    --base:#f4e8c6; --paper:#fbf3da; --surface:#fdf7e6; --gold:#f1ce5f; --green:#8cb06a; --cream:#efe6cd;
+    --blue:#9bbcd0; --ink:#4a3b26; --ink2:#7a6648;
+    --walk:#6fa04a; --metro:#5b86a6; --taxi:#e0883c;
+    --font:'LXGW WenKai','LXGW WenKai TC',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);min-height:100vh;display:flex;justify-content:center;align-items:flex-start;
+    padding:38px 16px;color:var(--ink);background:#e3d7b4;
+    background-image:radial-gradient(50% 38% at 16% 6%,rgba(140,176,106,.30),transparent 70%),
+      radial-gradient(46% 40% at 90% 88%,rgba(155,188,208,.30),transparent 72%);
+    background-attachment:fixed}
+
+  .phone{width:390px;height:800px;border-radius:46px;background:#e7d9b3;padding:11px;position:relative;
+    box-shadow:0 40px 80px -34px rgba(80,62,30,.55), inset 0 0 0 1.5px rgba(255,255,255,.5)}
+  .screen{width:100%;height:100%;border-radius:35px;overflow:hidden;position:relative;display:flex;flex-direction:column;background:var(--base)}
+  /* 纸纹 */
+  .screen::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:40;opacity:.45;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E")}
+
+  /* ===== 顶栏（与地图页一致） ===== */
+  .topbar{padding:30px 14px 10px;display:flex;align-items:center;gap:9px;position:relative;z-index:10}
+  .pbtn{position:relative;border:none;background:none;cursor:pointer;font-family:var(--font);color:var(--ink);padding:0;flex-shrink:0}
+  .pbtn>svg.shape{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 3px 3px rgba(74,59,38,.18))}
+  .pbtn .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2}
+  .b-city{width:92px;height:58px}
+  .b-seg{width:122px;height:58px;margin-left:auto}
+  .b-set,.b-imp{width:50px;height:64px}
+  .b-city .c{gap:5px;font-size:16px;font-weight:600}
+  .b-city img{height:19px}
+  .b-city .chev{font-size:10px;opacity:.6}
+  .stack{flex-direction:column;gap:3px}
+  .stack img{height:24px}
+  .stack .t{font-size:12px;font-weight:600}
+  .b-imp img{height:23px}
+  .b-seg .half{position:absolute;top:0;height:100%;width:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;z-index:2;cursor:pointer;--c:var(--ink)}
+  .b-seg .half.l{left:0}.b-seg .half.r{right:0}
+  .b-seg .half.active{--c:#fff}
+  .b-seg .half .t{font-size:12px;font-weight:600;color:var(--c)}
+  .b-seg .half .ic-map{width:24px;height:21px;background:var(--c);-webkit-mask:url(assets/icon-map.png) center/contain no-repeat;mask:url(assets/icon-map.png) center/contain no-repeat}
+  .b-seg .half .ic-bars{color:var(--c);display:flex}
+
+  /* ===== 标题行 + 图例 ===== */
+  .titlerow{padding:6px 16px 10px;display:flex;align-items:center;gap:8px;position:relative;z-index:5;flex-wrap:wrap}
+  .titlerow .crown{font-size:18px}
+  .titlerow h1{font-size:16px;font-weight:700;color:var(--ink)}
+  .titlerow .info{font-size:13px;color:#b9a878}
+  .legend{margin-left:auto;display:flex;gap:11px;font-size:12px;color:var(--ink2)}
+  .legend i{font-style:normal}
+  .legend .walk b,.legend .metro b,.legend .taxi b{font-weight:400}
+  .legend .walk{color:var(--walk)} .legend .metro{color:var(--metro)} .legend .taxi{color:var(--taxi)}
+
+  /* ===== 排名列表 ===== */
+  .feed{flex:1;overflow-y:auto;padding:2px 14px 0;position:relative;z-index:2}
+  .feed::-webkit-scrollbar{display:none}
+  .rcard{display:flex;flex-direction:column;gap:9px;background:var(--surface);border-radius:18px;padding:13px 14px;margin-bottom:11px;
+    box-shadow:0 4px 12px -5px rgba(80,62,30,.22), inset 0 0 0 1px rgba(255,255,255,.5)}
+  .rtop{display:flex;align-items:center;gap:11px}
+  .rbadge{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--gold);color:#7a5a14;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;box-shadow:0 2px 4px rgba(120,90,20,.3)}
+  .rcard:nth-child(1) .rbadge{background:var(--gold)}
+  .rcard:nth-child(2) .rbadge{background:#d9c7a0;color:#6b5a36}
+  .rcard:nth-child(3) .rbadge{background:#e2b48a;color:#6e4526}
+  .rcard:nth-child(n+4) .rbadge{background:var(--cream);color:var(--ink2)}
+  .rname{flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 通勤比例条：一根条，按各方式时间占比分段 */
+  .rbar{display:flex;height:20px;border-radius:10px;overflow:hidden;
+    box-shadow:inset 0 0 0 1px rgba(120,100,60,.12)}
+  .rbar .seg{height:100%;display:flex;align-items:center;justify-content:center;gap:3px;
+    font-size:11px;font-weight:600;color:#fff;white-space:nowrap;min-width:0;overflow:hidden}
+  .rbar .seg.walk{background:var(--walk)}
+  .rbar .seg.metro{background:var(--metro)}
+  .rbar .seg.taxi{background:var(--taxi)}
+  .rbar .seg .ic{font-size:11px}
+  .ravg{flex-shrink:0;text-align:right;padding-left:4px}
+  .ravg .lab{font-size:10px;color:var(--ink2);margin-bottom:1px}
+  .ravg .big{font-size:26px;font-weight:700;color:var(--taxi);line-height:1}
+  .ravg .big span{font-size:13px;font-weight:600;margin-left:1px}
+
+  /* 避雷区 */
+  .rwarn{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-top:9px;border-top:1px dashed var(--cream)}
+  .rwarn .rate{font-size:12.5px;font-weight:700}
+  .rwarn .rate.good{color:#4a9a55} .rwarn .rate.mid{color:#d08a2c} .rwarn .rate.bad{color:#d04a3c}
+  .wtag{display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 8px;border-radius:9px;font-weight:600}
+  .wtag.hi{background:#fdeceb;color:#d04a3c}
+  .wtag.mid{background:#fdf1e2;color:#c47b22}
+  .wtag.lo{background:#fbf6dd;color:#a98c2a}
+  .rwarn .verdict{flex-basis:100%;font-size:11px;color:var(--ink2);font-style:italic}
+  .rwarn .verdict.clean{color:#4a9a55;font-style:normal}
+
+  /* ===== 底部景点卡探头（收起态） ===== */
+  .dock{position:absolute;left:0;right:0;bottom:0;height:96px;z-index:8}
+  .tray{position:absolute;inset:0;width:100%;height:100%;z-index:1;filter:drop-shadow(0 -2px 5px rgba(120,100,60,.11))}
+  .tray path{fill:#f6eed6}
+  .peek{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;gap:8px;justify-content:center;align-items:flex-end;padding:0 14px 30px}
+  .pcard{width:64px;height:54px;border-radius:14px 14px 9px 9px;background:var(--surface);
+    box-shadow:0 -2px 8px -3px rgba(80,62,30,.25), inset 0 0 0 1px rgba(255,255,255,.5);
+    display:flex;align-items:center;justify-content:center;font-size:22px}
+  .pcard.sel{background:var(--gold);height:64px}
+  .dots{position:absolute;left:0;right:0;bottom:16px;z-index:3;display:flex;gap:6px;justify-content:center}
+  .dots i{width:7px;height:7px;border-radius:50%;background:#cdbf9d}
+  .dots i.on{background:#7a6648;width:9px;height:9px}
+  .homebar{position:absolute;left:50%;transform:translateX(-50%);bottom:7px;z-index:3;width:120px;height:5px;border-radius:3px;background:#cbb98f}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="screen">
+
+      <!-- 顶栏 -->
+      <div class="topbar">
+        <button class="pbtn b-city">
+          <svg class="shape" viewBox="0 0 200 126" preserveAspectRatio="none"><path fill="var(--gold)" d="M38.2,9.2 C77.7,-0.7 119.7,-0.0 161.4,4.3 C177.4,7.9 183.9,12.6 186.6,24.1 C199.1,42.8 196.5,76.6 186.1,102.3 C184.5,113.0 176.0,118.6 160.0,121.9 C119.4,124.7 81.6,128.0 40.7,119.6 C23.0,115.9 16.3,112.2 14.0,102.6 C0.4,78.1 -1.3,43.3 11.2,21.1 C17.3,14.9 25.3,10.1 38.2,9.2 Z"/></svg>
+          <span class="c"><img src="assets/icon-pin.png" alt=""><span>杭州</span><span class="chev">▾</span></span>
+        </button>
+        <button class="pbtn b-seg">
+          <svg class="shape" viewBox="0 0 200 95" preserveAspectRatio="none">
+            <defs><clipPath id="segclip"><path d="M42.7,4.2 C78.2,1.9 118.9,0.6 160.9,4.7 C176.2,7.6 184.3,11.5 190.3,17.2 C197.9,32.4 196.3,59.5 188.3,80.3 C184.6,84.7 175.0,89.6 158.6,91.5 C118.1,90.9 81.7,97.0 42.4,89.5 C24.2,87.0 17.3,83.1 12.4,76.0 C0.2,64.0 2.5,33.1 11.6,16.0 C14.7,11.8 24.1,6.7 42.7,4.2 Z"/></clipPath></defs>
+            <path fill="var(--cream)" d="M42.7,4.2 C78.2,1.9 118.9,0.6 160.9,4.7 C176.2,7.6 184.3,11.5 190.3,17.2 C197.9,32.4 196.3,59.5 188.3,80.3 C184.6,84.7 175.0,89.6 158.6,91.5 C118.1,90.9 81.7,97.0 42.4,89.5 C24.2,87.0 17.3,83.1 12.4,76.0 C0.2,64.0 2.5,33.1 11.6,16.0 C14.7,11.8 24.1,6.7 42.7,4.2 Z"/>
+            <rect class="lhalf" x="50%" y="0" width="50%" height="100%" fill="var(--green)" clip-path="url(#segclip)"/>
+          </svg>
+          <span class="half l" data-side="map"><span class="ic-map"></span><span class="t">地图</span></span>
+          <span class="half r active" data-side="rank">
+            <span class="ic-bars"><svg width="22" height="20" viewBox="0 0 22 20" fill="currentColor"><rect x="2" y="9" width="5" height="9" rx="1.5"/><rect x="9" y="4" width="5" height="14" rx="1.5"/><rect x="16" y="11" width="5" height="7" rx="1.5"/></svg></span>
+            <span class="t">排行榜</span>
+          </span>
+        </button>
+        <button class="pbtn b-set">
+          <svg class="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill="var(--cream)" d="M32.4,11.0 C63.7,1.0 91.1,1.8 125.0,13.2 C135.5,13.2 144.3,22.5 145.8,38.1 C155.4,76.4 156.8,123.5 144.5,164.4 C144.2,177.9 137.8,187.3 122.1,186.9 C92.5,201.8 59.7,201.9 32.1,186.1 C17.1,184.6 12.3,176.8 7.7,166.0 C0.3,126.1 -2.0,72.4 6.1,38.4 C11.0,22.2 20.7,14.9 32.4,11.0 Z"/></svg>
+          <span class="c stack"><img src="assets/icon-gear.png" alt=""><span class="t">设置</span></span>
+        </button>
+        <button class="pbtn b-imp">
+          <svg class="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill="var(--blue)" d="M28.7,8.8 C58.2,-0.0 95.1,-0.2 122.4,9.1 C136.1,12.9 145.3,20.4 145.6,33.6 C150.4,72.8 158.5,126.0 144.7,166.3 C142.0,177.1 138.5,186.2 125.2,189.3 C95.6,199.0 64.4,200.7 29.3,192.3 C18.9,185.6 11.1,177.0 10.2,165.7 C1.6,127.6 -1.7,69.8 11.0,38.9 C13.8,23.8 19.6,12.7 28.7,8.8 Z"/></svg>
+          <span class="c stack"><img src="assets/icon-download.png" alt=""><span class="t">导入</span></span>
+        </button>
+      </div>
+
+      <!-- 标题行 + 图例 -->
+      <div class="titlerow">
+        <span class="crown">👑</span>
+        <h1>酒店通行时间排行榜</h1>
+        <span class="info">ⓘ</span>
+        <div class="legend">
+          <span class="walk">🚶<b>步行</b></span>
+          <span class="metro">🚇<b>地铁</b></span>
+          <span class="taxi">🚗<b>打车</b></span>
+        </div>
+      </div>
+
+      <!-- 排名列表 -->
+      <div class="feed">
+        <div class="rcard">
+          <div class="rtop">
+            <div class="rbadge">1</div>
+            <div class="rname">西湖隐舍酒店</div>
+            <div class="ravg"><div class="lab">平均通行时间</div><div class="big">28<span>min</span></div></div>
+          </div>
+          <div class="rbar"><span class="seg walk" style="flex:5"><span class="ic">🚶</span>5</span><span class="seg metro" style="flex:18"><span class="ic">🚇</span>18</span><span class="seg taxi" style="flex:5"><span class="ic">🚗</span>5</span></div>
+          <div class="rwarn">
+            <span class="rate good">★ 4.7</span>
+            <span class="verdict clean">✓ 市中心好位置，整体口碑佳，暂无明显雷点</span>
+          </div>
+        </div>
+
+        <div class="rcard">
+          <div class="rtop">
+            <div class="rbadge">2</div>
+            <div class="rname">杭州君悦酒店</div>
+            <div class="ravg"><div class="lab">平均通行时间</div><div class="big">32<span>min</span></div></div>
+          </div>
+          <div class="rbar"><span class="seg walk" style="flex:8"><span class="ic">🚶</span>8</span><span class="seg metro" style="flex:17"><span class="ic">🚇</span>17</span><span class="seg taxi" style="flex:7"><span class="ic">🚗</span>7</span></div>
+          <div class="rwarn">
+            <span class="rate good">★ 4.5</span>
+            <span class="wtag mid">⚠ 早餐拥挤</span>
+            <span class="verdict">近地铁出行方便，早餐高峰排队较久</span>
+          </div>
+        </div>
+
+        <div class="rcard">
+          <div class="rtop">
+            <div class="rbadge">3</div>
+            <div class="rname">钱江新城万怡酒店</div>
+            <div class="ravg"><div class="lab">平均通行时间</div><div class="big">35<span>min</span></div></div>
+          </div>
+          <div class="rbar"><span class="seg walk" style="flex:28"><span class="ic">🚶</span>28</span><span class="seg metro" style="flex:20"><span class="ic">🚇</span>20</span><span class="seg taxi" style="flex:8"><span class="ic">🚗</span>8</span></div>
+          <div class="rwarn">
+            <span class="rate mid">★ 4.2</span>
+            <span class="wtag hi">⚠ 隔音差</span>
+            <span class="wtag lo">⚠ 电梯慢（少数）</span>
+            <span class="verdict">步行偏远建议地铁，临街房隔音需注意</span>
+          </div>
+        </div>
+
+        <div class="rcard">
+          <div class="rtop">
+            <div class="rbadge">4</div>
+            <div class="rname">湖滨银泰之朵酒店</div>
+            <div class="ravg"><div class="lab">平均通行时间</div><div class="big">38<span>min</span></div></div>
+          </div>
+          <div class="rbar"><span class="seg walk" style="flex:7"><span class="ic">🚶</span>7</span><span class="seg metro" style="flex:25"><span class="ic">🚇</span>25</span><span class="seg taxi" style="flex:10"><span class="ic">🚗</span>10</span></div>
+          <div class="rwarn">
+            <span class="rate mid">★ 4.4</span>
+            <span class="wtag mid">⚠ 停车难</span>
+            <span class="verdict">紧邻商圈打车友好，自驾停车位紧张</span>
+          </div>
+        </div>
+
+        <div class="rcard">
+          <div class="rtop">
+            <div class="rbadge">5</div>
+            <div class="rname">杭州逸境酒店</div>
+            <div class="ravg"><div class="lab">平均通行时间</div><div class="big">45<span>min</span></div></div>
+          </div>
+          <div class="rbar"><span class="seg walk" style="flex:40"><span class="ic">🚶</span>40</span><span class="seg taxi" style="flex:15"><span class="ic">🚗</span>15</span></div>
+          <div class="rwarn">
+            <span class="rate bad">★ 3.9</span>
+            <span class="wtag hi">⚠ 卫生（少数）</span>
+            <span class="wtag mid">⚠ 设施偏旧</span>
+            <span class="verdict">价格友好但距离远，设施陈旧依赖打车</span>
+          </div>
+        </div>
+
+        <div style="height:104px"></div>
+      </div>
+
+      <!-- 底部景点卡探头（收起） -->
+      <div class="dock">
+        <svg class="tray" viewBox="0 0 390 96" preserveAspectRatio="none">
+          <path d="M0,30 C78,14 128,8 182,22 C218,32 258,40 312,26 C342,18 368,16 390,24 L390,96 L0,96 Z"/>
+        </svg>
+        <div class="peek">
+          <div class="pcard">🗼</div>
+          <div class="pcard sel">🏝️</div>
+          <div class="pcard">🌉</div>
+          <div class="pcard">⛩️</div>
+        </div>
+        <div class="dots"><i class="on"></i><i></i><i></i></div>
+        <div class="homebar"></div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

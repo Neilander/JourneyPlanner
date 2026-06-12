@@ -9,6 +9,8 @@
   --ink:     #4A3B26;
   --ink-mid: #8A7550;
   --cream:   #EFE6CD;
+  --gold:    #f1ce5f;
+  --card:    #fdf7e6;
 }
 
 @theme inline {
@@ -20,3 +22,87 @@ body {
   background: var(--base);
   color: var(--ink);
 }
+
+/* ───────── 小蜜 · 鼓边顶栏按钮 ───────── */
+.xm-topbar{display:flex;align-items:center;gap:7px}
+.pbtn{position:relative;border:none;background:none;cursor:pointer;color:var(--ink);padding:0;flex-shrink:0;font-family:inherit}
+.pbtn > svg.shape{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 3px 3px rgba(74,59,38,.18))}
+.pbtn .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2}
+.b-city{width:80px;height:54px}
+.b-seg{width:108px;height:54px;margin-left:auto}
+.b-set,.b-imp{width:46px;height:60px}
+.b-city .c{gap:4px;font-size:15px;font-weight:600}
+.b-city .c img{height:17px}
+.b-city .chev{font-size:10px;opacity:.6}
+.stack{flex-direction:column;gap:2px}
+.stack img{height:22px}
+.stack .t{font-size:11px;font-weight:600}
+.b-imp .stack img{height:21px}
+.b-seg .half{position:absolute;top:0;height:100%;width:50%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;z-index:2;cursor:pointer;--c:var(--ink)}
+.b-seg .half.l{left:0}.b-seg .half.r{right:0}
+.b-seg .half.active{--c:#fff}
+.b-seg .half .t{font-size:11px;font-weight:600;color:var(--c)}
+.b-seg .half .ic-map{width:22px;height:19px;background:var(--c);
+  -webkit-mask:url(/icons/icon-map.png) center/contain no-repeat;mask:url(/icons/icon-map.png) center/contain no-repeat}
+.b-seg .half .ic-bars{color:var(--c);display:flex}
+
+/* ───────── 小蜜 · 底部扇形景点卡 ───────── */
+/* 浮层底板：绝对定位盖在地图上 */
+.xm-dock{position:absolute;left:0;right:0;bottom:0;height:330px;z-index:10}
+/* 底板：贴底，height 决定波浪上边线高度（小=边更靠下） */
+.xm-tray-bg{position:absolute;left:0;right:0;bottom:0;height:308px;z-index:0;
+  filter:drop-shadow(0 -2px 5px rgba(120,100,60,.12))}
+.xm-tray-bg svg{width:100%;height:100%;display:block}
+.xm-dock-inner{position:absolute;inset:0;z-index:1}
+
+.xm-cards{position:absolute;left:0;right:0;bottom:54px;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;
+  padding:52px calc(50% - 61px) 22px;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;perspective:1000px;cursor:grab;
+  touch-action:pan-x;user-select:none;-webkit-user-select:none}
+.xm-cards.dragging{cursor:grabbing;scroll-snap-type:none}
+.xm-cards::-webkit-scrollbar{display:none}
+.acard{flex:0 0 122px;scroll-snap-align:center;position:relative;cursor:pointer;
+  background:var(--card);border-radius:19px;padding:8px 8px 11px;transform-origin:50% 100%;
+  box-shadow:0 8px 16px -6px rgba(80,62,30,.32), inset 0 0 0 1px rgba(255,255,255,.5);
+  transition:background .35s ease;will-change:transform}
+.acard.liked{background:var(--gold)}
+.acard .pic{height:150px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  font-size:46px;background:radial-gradient(120% 100% at 50% 0,#eef2e0,#e3ead6);
+  box-shadow:inset 0 0 0 1px rgba(120,100,60,.10)}
+.acard.liked .pic{background:radial-gradient(120% 100% at 50% 0,#fbeec0,#f6e4ad)}
+.acard .heart{position:absolute;top:11px;right:12px;z-index:3;width:21px;height:21px;color:#c2b187}
+.acard.liked .heart{color:#e0524a}
+.acard .heart svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.12))}
+.acard .heart path{fill:none;stroke:currentColor;stroke-width:2.4}
+.acard.liked .heart path{fill:currentColor;stroke:none}
+.acard .ttl{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:9px;
+  font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acard .ttl .pin{color:#e0524a;font-size:13px;flex-shrink:0}
+/* 圆球：独立贴底定位，改 bottom 即可单独上下移，不动卡牌 */
+.xm-dots{position:absolute;left:0;right:0;bottom:22px;z-index:2;display:flex;gap:6px;justify-content:center}
+
+/* ───────── 小蜜 · 排行榜卡 ───────── */
+.xm-rcard{display:flex;flex-direction:column;gap:9px;background:var(--surface);border-radius:18px;padding:13px 14px;margin-bottom:11px;
+  box-shadow:0 4px 12px -5px rgba(80,62,30,.22), inset 0 0 0 1px rgba(255,255,255,.5)}
+.xm-rtop{display:flex;align-items:center;gap:10px}
+.xm-rbadge{flex-shrink:0;width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:14px;box-shadow:0 2px 4px rgba(120,90,20,.25)}
+.xm-rname{flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xm-ravg{flex-shrink:0;text-align:right}
+.xm-ravg .lab{font-size:10px;color:var(--ink-mid);line-height:1.1}
+.xm-ravg .big{font-size:24px;font-weight:700;color:var(--accent);line-height:1}
+.xm-ravg .big span{font-size:12px;font-weight:600;margin-left:1px}
+.xm-rbar{display:flex;height:20px;border-radius:10px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(120,100,60,.12)}
+.xm-seg{height:100%;display:flex;align-items:center;justify-content:center;gap:3px;font-size:10.5px;font-weight:600;
+  color:#fff;white-space:nowrap;min-width:0;overflow:hidden;padding:0 3px}
+.xm-rwarn{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-top:9px;border-top:1px dashed var(--cream)}
+.xm-rate{font-size:12.5px;font-weight:700}
+.xm-wtag{display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 8px;border-radius:9px;font-weight:600}
+.xm-wtag.hi{background:#fdeceb;color:#d04a3c}
+.xm-wtag.mid{background:#fdf1e2;color:#c47b22}
+.xm-wtag.lo{background:#fbf6dd;color:#a98c2a}
+.xm-verdict{flex-basis:100%;font-size:11px;color:var(--ink-mid);font-style:italic}
+.xm-verdict.clean{color:#4a9a55;font-style:normal}
+.xm-dots i{width:7px;height:7px;border-radius:50%;background:#cdbf9d;transition:all .3s}
+.xm-dots i.on{background:#7a6648;width:9px;height:9px}
