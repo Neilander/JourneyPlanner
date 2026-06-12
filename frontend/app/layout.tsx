@@ -4,7 +4,7 @@ import "./globals.css";
 
 const zcoolKuaiLe = ZCOOL_KuaiLe({
   weight: "400",
-  subsets: ["chinese-simplified"],
+  subsets: ["latin"],
   display: "swap",
   variable: "--font-display",
 });
