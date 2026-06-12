@@ -777,15 +777,21 @@ def ensure_session(open_kfid: str, user_id: str, token: str) -> bool:
                       json={"open_kfid": open_kfid, "external_userid": user_id})
     state = r.json()
     service_state = state.get("service_state", -1)
-    if service_state == 0:
+    # 0=未处理 1=智能助手(API) 2=待接入池 3=人工接待 4=已结束
+    # 配了「接待人员」后新会话会进 2（待接入池），bot 也主动接管，保证自动回复
+    if service_state in (0, 2, 4):
         r2 = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/trans",
                            params={"access_token": token},
                            json={"open_kfid": open_kfid, "external_userid": user_id,
                                  "service_state": 1})
-        return r2.json().get("errcode", -1) == 0
+        ok = r2.json().get("errcode", -1) == 0
+        if not ok:
+            print(f"trans to 1 failed from state {service_state}: {r2.json()}")
+        return ok
     elif service_state == 1:
         return True
     else:
+        # 3=人工接待中：不抢人工的会话
         print(f"skip send: session in state {service_state}")
         return False
 
