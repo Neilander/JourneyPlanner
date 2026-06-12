@@ -54,15 +54,44 @@
   .maparea .ph{color:#8a977a;font-size:14px;text-align:center;line-height:1.8;margin-bottom:120px}
 
   /* 底部曲线托盘背景 */
-  .dock{position:absolute;left:0;right:0;bottom:0;height:262px;z-index:5}
+  .dock{position:absolute;left:0;right:0;bottom:0;height:320px;z-index:5}
   .tray{position:absolute;inset:0;width:100%;height:100%;z-index:1;
     filter:drop-shadow(0 -2px 5px rgba(120,100,60,.11))}
   .tray path{fill:#f6eed6}
-  .dock .inner{position:relative;z-index:2;padding:64px 14px 22px}
-  .dock .hint{font-size:12px;color:var(--ink2);margin-bottom:10px;padding-left:2px}
-  .dockph{display:flex;gap:10px}
-  .dockph .ph{flex:1;height:120px;border-radius:18px;background:repeating-linear-gradient(135deg,#efe6cd 0 9px,#e9dec0 9px 18px);
-    border:1.5px dashed #cdbf9d;display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;color:#9a8a64;font-size:12px}
+  .dock .inner{position:relative;z-index:2;padding:22px 0 14px}
+
+  /* 景点卡组（扇形弧线 · 可左右拖）*/
+  .cards{position:relative;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;
+    padding:28px calc(50% - 61px) 6px;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;perspective:1000px;cursor:grab;
+    touch-action:pan-x;user-select:none;-webkit-user-select:none}
+  .cards.dragging{cursor:grabbing;scroll-snap-type:none}
+  .cards::-webkit-scrollbar{display:none}
+  .acard{flex:0 0 122px;scroll-snap-align:center;position:relative;cursor:pointer;
+    background:var(--card);border-radius:19px;padding:8px 8px 11px;transform-origin:50% 100%;
+    box-shadow:0 8px 16px -6px rgba(80,62,30,.32), inset 0 0 0 1px rgba(255,255,255,.5);
+    transition:background .35s ease;will-change:transform}
+  .acard.liked{background:var(--gold)}
+  /* 图片占位（之后接插画）*/
+  .acard .pic{height:150px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+    font-size:46px;background:radial-gradient(120% 100% at 50% 0,#eef2e0,#e3ead6);
+    box-shadow:inset 0 0 0 1px rgba(120,100,60,.10)}
+  .acard.liked .pic{background:radial-gradient(120% 100% at 50% 0,#fbeec0,#f6e4ad)}
+  /* 爱心 */
+  .heart{position:absolute;top:11px;right:12px;z-index:3;width:21px;height:21px;color:#bcaE8a;color:#c2b187}
+  .acard.liked .heart{color:#e0524a}
+  .heart svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.12))}
+  .heart path{fill:none;stroke:currentColor;stroke-width:2.4}
+  .acard.liked .heart path{fill:currentColor;stroke:none}
+  /* 标题 + 简介 */
+  .acard .ttl{display:flex;align-items:center;gap:3px;margin-top:9px;font-size:14px;font-weight:700;color:var(--ink)}
+  .acard .ttl .pin{color:#e0524a;font-size:13px;flex-shrink:0}
+  .acard .desc{margin-top:4px;font-size:10.5px;line-height:1.45;color:var(--ink2);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  /* pager dots */
+  .dots{display:flex;gap:6px;justify-content:center;margin-top:13px}
+  .dots i{width:7px;height:7px;border-radius:50%;background:#cdbf9d;transition:all .3s}
+  .dots i.on{background:#7a6648;width:9px;height:9px}
 </style>
 </head>
 <body>
@@ -119,10 +148,21 @@
                    L390,262 L0,262 Z"/>
         </svg>
         <div class="inner">
-          <div class="hint">已导入 3 家酒店 · 抽出你想去的景点</div>
-          <div class="dockph">
-            <span class="ph">景点卡</span><span class="ph">景点卡</span><span class="ph">景点卡</span><span class="ph">景点卡</span>
+          <div class="cards" id="cards">
+            <div class="acard"><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"/></svg></span>
+              <div class="pic">🗼</div><div class="ttl"><span class="pin">📍</span>雷峰塔</div><div class="desc">湖畔古塔，夕照名景</div></div>
+            <div class="acard liked"><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"/></svg></span>
+              <div class="pic">🏝️</div><div class="ttl"><span class="pin">📍</span>三潭印月</div><div class="desc">湖心三塔，西湖名片</div></div>
+            <div class="acard"><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"/></svg></span>
+              <div class="pic">🌉</div><div class="ttl"><span class="pin">📍</span>断桥残雪</div><div class="desc">白堤拱桥，柳影成趣</div></div>
+            <div class="acard"><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"/></svg></span>
+              <div class="pic">⛩️</div><div class="ttl"><span class="pin">📍</span>灵隐寺</div><div class="desc">深山古刹，香火千年</div></div>
+            <div class="acard"><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"/></svg></span>
+              <div class="pic">⛰️</div><div class="ttl"><span class="pin">📍</span>西湖</div><div class="desc">三面云山，一水抱城</div></div>
+            <div class="acard"><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"/></svg></span>
+              <div class="pic">🏘️</div><div class="ttl"><span class="pin">📍</span>河坊街</div><div class="desc">青石老街，市井烟火</div></div>
           </div>
+          <div class="dots" id="dots"></div>
         </div>
       </div>
 
@@ -136,6 +176,87 @@
       half.classList.add('active');
       rect.setAttribute('x', half.dataset.side==='map'?'0':'50%');
     }));
+
+    const cards=document.getElementById('cards');
+    const list=[...cards.querySelectorAll('.acard')];
+
+    // 拖拽状态（供爱心点击判断是否「刚拖过」）
+    let down=false, sx=0, sl=0, moved=false;
+
+    // 点爱心 = 喜欢（换底色，层级不变）；拖动后那一下 click 不算
+    list.forEach(card=>{
+      card.querySelector('.heart').addEventListener('click',e=>{
+        e.stopPropagation();
+        if(moved) return;
+        card.classList.toggle('liked');
+      });
+    });
+
+    // 扇形弧线：用「未变换」的布局坐标 offsetLeft 计算，避免读到自身 transform 造成的反馈抖动
+    function arc(){
+      const center = cards.scrollLeft + cards.clientWidth/2;
+      const span = cards.clientWidth * 0.42;
+      for(const card of list){
+        const cardCenter = card.offsetLeft + card.offsetWidth/2;
+        const d = Math.max(-1.4, Math.min(1.4, (cardCenter - center)/span));
+        const rot = d*11, lift = d*d*26, sc = 1 - Math.abs(d)*0.08;
+        card.style.transform = `translateY(${lift.toFixed(1)}px) rotate(${rot.toFixed(2)}deg) scale(${sc.toFixed(3)})`;
+      }
+    }
+    let raf=0;
+    function onScroll(){ if(!raf) raf=requestAnimationFrame(()=>{ raf=0; arc(); updateDots(); }); }
+    cards.addEventListener('scroll', onScroll, {passive:true});
+    window.addEventListener('resize', arc);
+
+    // 鼠标拖拽横滑（桌面预览也能用）
+    cards.addEventListener('pointerdown',e=>{
+      down=true; moved=false; sx=e.clientX; sl=cards.scrollLeft;
+      cards.classList.add('dragging'); cards.setPointerCapture?.(e.pointerId);
+    });
+    cards.addEventListener('pointermove',e=>{
+      if(!down) return;
+      const dx=e.clientX-sx;
+      if(Math.abs(dx)>4) moved=true;
+      cards.scrollLeft = sl - dx;     // 直接驱动原生滚动，scroll 事件触发 arc()
+    });
+    function endDrag(e){
+      if(!down) return;
+      down=false; cards.classList.remove('dragging');
+      try{ cards.releasePointerCapture?.(e.pointerId); }catch(_){}
+      // 拖完吸附到最近一张
+      const center = cards.scrollLeft + cards.clientWidth/2;
+      let best=null, bd=Infinity;
+      for(const card of list){
+        const dd=Math.abs(card.offsetLeft+card.offsetWidth/2 - center);
+        if(dd<bd){ bd=dd; best=card; }
+      }
+      if(best) cards.scrollTo({left:best.offsetLeft+best.offsetWidth/2 - cards.clientWidth/2, behavior:'smooth'});
+      // moved 稍后复位，确保本次 click 已被拦截
+      setTimeout(()=>{ moved=false; }, 0);
+    }
+    cards.addEventListener('pointerup', endDrag);
+    cards.addEventListener('pointercancel', endDrag);
+    // 竖向滚轮转横滑
+    cards.addEventListener('wheel',e=>{
+      if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){ cards.scrollLeft += e.deltaY; e.preventDefault(); }
+    },{passive:false});
+
+    // pager dots
+    const dots=document.getElementById('dots');
+    const PAGES=Math.min(5,list.length);
+    for(let i=0;i<PAGES;i++){ dots.appendChild(document.createElement('i')); }
+    function updateDots(){
+      const max=cards.scrollWidth-cards.clientWidth;
+      const p=max>0?Math.round(cards.scrollLeft/max*(PAGES-1)):0;
+      dots.querySelectorAll('i').forEach((d,i)=>d.classList.toggle('on',i===p));
+    }
+
+    // 初始：第二张（三潭印月）居中
+    requestAnimationFrame(()=>{
+      const sel=list[1];
+      if(sel) cards.scrollLeft = sel.offsetLeft + sel.offsetWidth/2 - cards.clientWidth/2;
+      arc(); updateDots();
+    });
   </script>
 </body>
 </html>
