@@ -814,6 +814,9 @@ def process_messages(sync_token: str, open_kf_id: str):
         token = get_access_token()
         resp = requests.post("https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg",
                              params={"access_token": token}, json=payload).json()
+        print(f"[sync_msg] errcode={resp.get('errcode')} errmsg={resp.get('errmsg')} "
+              f"msgs={len(resp.get('msg_list', []))} cursor={cursor!r}->{resp.get('next_cursor')!r} "
+              f"has_more={resp.get('has_more')}", flush=True)
         next_cursor = resp.get("next_cursor")
         if next_cursor:
             kv_set("sync_cursor", next_cursor)
@@ -855,6 +858,8 @@ async def receive(request: Request, background_tasks: BackgroundTasks,
     root = ET.fromstring(xml)
     sync_token = root.findtext("Token")
     open_kf_id = root.findtext("OpenKfId")
+    event = root.findtext("Event")
+    print(f"[callback] event={event!r} token={'Y' if sync_token else 'N'} kfid={open_kf_id!r} xml={xml[:200]!r}", flush=True)
     if sync_token:
         background_tasks.add_task(process_messages, sync_token, open_kf_id)
     return Response(content="success")
