@@ -217,7 +217,12 @@ export default function Home() {
         setMapReady(n => n + 1)
       })
     })()
-    return () => { cancelled = true; mapRef.current?.destroy() }
+    return () => {
+      cancelled = true
+      attractionMarkersRef.current.forEach(m => { try { m.setMap(null) } catch {} })
+      attractionMarkersRef.current = []
+      mapRef.current?.destroy()
+    }
   }, [mapCenter, attractions])
 
   const markerHTML = (name: string, isSel: boolean) => {
