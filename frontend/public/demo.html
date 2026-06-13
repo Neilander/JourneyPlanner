@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>旅居小蜜 · 演示流程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;1,500&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f0ece1; --paper-hi:#faf7f0; --ink:#3a3329; --ink2:#8a7d68; --gold:#b08a4a;
+    --accent:#e0883c; --ctrip:#2f8fff; --wx-bg:#ededed; --wx-bar:#f7f7f7; --wx-green:#95ec69;
+    --serif:'Noto Serif SC',serif; --fr:'Fraunces',serif; --wk:'LXGW WenKai','LXGW WenKai TC',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;background:var(--paper);font-family:var(--wk);color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;padding:24px 12px;
+    background-image:radial-gradient(70% 38% at 50% 0,var(--paper-hi),transparent 70%)}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .brand .logo{width:46px;height:46px;border-radius:50%;background:#f7ead0;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px -7px rgba(120,90,30,.5)}
+  .brand .nm{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:1px}
+  .brand .kk{font-family:var(--fr);font-style:italic;color:var(--ink2);font-size:14px;margin-left:2px}
+
+  .phonewrap{position:relative;display:flex;justify-content:center}
+  .phone{width:344px;height:720px;border-radius:46px;background:#1b1b1f;padding:7px;position:relative;z-index:10;
+    box-shadow:0 44px 80px -30px rgba(70,52,24,.5),0 14px 30px -14px rgba(70,52,24,.4),inset 0 0 0 1px rgba(255,255,255,.1)}
+  .notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:104px;height:22px;background:#1b1b1f;border-radius:0 0 14px 14px;z-index:60}
+  .screen{width:100%;height:100%;border-radius:40px;overflow:hidden;position:relative;background:#fff}
+
+  .pops{position:absolute;top:-30px;bottom:-30px;left:-210px;right:-210px;z-index:5;pointer-events:none}
+  .pop{position:absolute;background:#fff;border:2px solid var(--ctrip);color:var(--ctrip);font-size:16px;font-weight:700;padding:9px 18px;border-radius:20px;box-shadow:0 10px 24px -8px rgba(47,143,255,.55);opacity:0;white-space:nowrap}
+  .pops.run .pop{animation:pop 2.8s ease-in-out infinite}
+  @keyframes pop{0%{opacity:0;transform:scale(.6)}14%{opacity:1;transform:scale(1)}55%{opacity:1}82%,100%{opacity:0;transform:scale(.9)}}
+
+  .scene{position:absolute;inset:0;opacity:0;transition:opacity .6s ease;pointer-events:none}
+  .scene.on{opacity:1}
+
+  /* 幕A 携程 */
+  .sa{background:#f3f4f6;display:flex;flex-direction:column}
+  .sa .top{background:var(--ctrip);color:#fff;padding:34px 14px 12px;flex-shrink:0}
+  .sa .top .t1{font-size:17px;font-weight:700}
+  .sa .search{margin-top:10px;background:#fff;border-radius:20px;height:34px;display:flex;align-items:center;padding:0 14px;color:#888;font-size:13px}
+  .sa .list-wrap{flex:1;overflow:hidden;position:relative}
+  .sa .list{padding:10px;display:flex;flex-direction:column;gap:10px;transform:translateY(0);transition:transform 6.5s linear}
+  .sa.run .list{transform:translateY(-360px)}
+  .htl{background:#fff;border-radius:12px;padding:9px;display:flex;gap:10px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  .htl .img{width:84px;height:70px;border-radius:9px;object-fit:cover;flex-shrink:0;background:#e7eadf}
+  .htl .info{flex:1;min-width:0;display:flex;flex-direction:column}
+  .htl .nm{font-size:14px;font-weight:700;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .htl .sub{font-size:11px;color:#999;margin-top:3px}
+  .htl .tags{margin-top:auto;display:flex;gap:5px}
+  .htl .tag{font-size:10px;color:var(--ctrip);background:#eaf3ff;border-radius:4px;padding:1px 6px}
+  .htl .price{color:#ff5b3c;font-weight:800;font-size:16px;align-self:flex-end}
+  .htl .price b{font-size:11px;font-weight:600}
+  .qcard{position:absolute;left:0;right:0;bottom:0;z-index:30;background:linear-gradient(180deg,rgba(243,244,246,0),#f3f4f6 38%);padding:60px 22px 30px;text-align:center;transform:translateY(100%);transition:transform .7s cubic-bezier(.2,.8,.2,1)}
+  .sa.q .qcard{transform:translateY(0)}
+  .qcard .q{font-family:var(--serif);font-weight:700;font-size:23px;color:var(--ink);line-height:1.45}
+  .qcard .q em{font-family:var(--fr);font-style:italic;color:var(--accent)}
+
+  /* 幕B 微信 */
+  .sb{background:var(--wx-bg);display:flex;flex-direction:column}
+  .wx-head{height:74px;background:var(--wx-bar);display:flex;align-items:flex-end;justify-content:center;position:relative;padding-bottom:10px;border-bottom:1px solid #dcdcdc}
+  .wx-head .back{position:absolute;left:14px;bottom:8px;font-size:23px;color:#181818}
+  .wx-head .title{font-size:16px;font-weight:600}
+  .wx-body{flex:1;padding:16px 14px;display:flex;flex-direction:column;gap:14px;overflow:hidden}
+  .wx-time{align-self:center;font-size:11px;color:#fff;background:#c8c8c8;border-radius:4px;padding:2px 7px}
+  .msg{display:flex;gap:9px;align-items:flex-start;max-width:82%;opacity:0;transform:translateY(12px);transition:all .45s cubic-bezier(.2,.8,.2,1)}
+  .msg.show{opacity:1;transform:none}
+  .msg.in{align-self:flex-start}
+  .msg.out{align-self:flex-end;flex-direction:row-reverse}
+  .av{width:40px;height:40px;border-radius:6px;flex-shrink:0;object-fit:cover}
+  .av.me{background:#7aa05a;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px}
+  .bub{padding:9px 12px;border-radius:6px;font-size:14.5px;line-height:1.5;color:#111;position:relative}
+  .in .bub{background:#fff}.out .bub{background:var(--wx-green)}
+  .in .bub::before{content:"";position:absolute;left:-5px;top:12px;border:6px solid transparent;border-right-color:#fff}
+  .out .bub::before{content:"";position:absolute;right:-5px;top:12px;border:6px solid transparent;border-left-color:var(--wx-green)}
+  .shots{display:flex;gap:6px;flex-wrap:wrap;max-width:200px}
+  .shot{width:60px;height:84px;border-radius:7px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.12);overflow:hidden;display:flex;flex-direction:column}
+  .shot .si{height:46px;width:100%;object-fit:cover}
+  .shot .sl{height:5px;background:#e3e3e3;margin:6px 6px 0;border-radius:3px}
+  .shot .sl.s2{width:60%}
+  .linkcard{background:#fff;border-radius:9px;padding:10px;width:200px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+  .linkcard .lt{font-size:13.5px;font-weight:700;color:#222}
+  .linkcard .lrow{display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid #eee;padding-top:8px}
+  .linkcard .lg{width:26px;height:26px;border-radius:5px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
+  .linkcard .ld{font-size:11px;color:#999}
+  .sb.tap .linkcard{animation:tap .5s ease}
+  @keyframes tap{50%{transform:scale(.95);box-shadow:0 0 0 3px rgba(224,136,60,.4)}}
+
+  /* 幕C 真实前端 */
+  .sc{background:#fff}
+  .appframe{width:100%;height:100%;border:0;display:block}
+
+  .endcard{position:absolute;inset:0;background:rgba(240,236,225,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;opacity:0;transition:opacity .6s;z-index:50}
+  .endcard.on{opacity:1}
+  .endcard .et{font-family:var(--serif);font-weight:700;font-size:25px;line-height:1.5}
+  .endcard .et em{font-family:var(--fr);font-style:italic;color:var(--gold)}
+  .endcard .es{margin-top:12px;font-size:15px;color:var(--ink2)}
+
+  .caption{margin-top:18px;text-align:center;min-height:56px;max-width:340px}
+  .caption .c{font-family:var(--serif);font-weight:700;font-size:20px;color:var(--ink);opacity:0;transition:opacity .5s}
+  .caption .c.on{opacity:1}
+  .replay{margin-top:6px;font-size:13px;color:var(--ink2);cursor:pointer;border:1px solid #e6dcc4;border-radius:18px;padding:6px 16px;background:#faf7f0}
+</style>
+</head>
+<body>
+  <div class="brand">
+    <span class="logo"><svg viewBox="0 0 100 124" width="30" height="30"><g stroke="#3a2a1a" stroke-width="5" stroke-linecap="round" fill="#3a2a1a"><line x1="43" y1="24" x2="33" y2="8"/><circle cx="32" cy="6" r="5.5"/><line x1="57" y1="24" x2="67" y2="8"/><circle cx="68" cy="6" r="5.5"/></g><defs><clipPath id="bb"><path d="M50,20 C72,20 88,36 88,57 C88,83 61,105 50,119 C39,105 12,83 12,57 C12,36 28,20 50,20Z"/></clipPath></defs><path d="M50,20 C72,20 88,36 88,57 C88,83 61,105 50,119 C39,105 12,83 12,57 C12,36 28,20 50,20Z" fill="#f6c72e"/><g clip-path="url(#bb)" fill="#3a2a1a"><rect x="0" y="70" width="100" height="9"/><rect x="0" y="87" width="100" height="9"/><rect x="0" y="104" width="100" height="9"/></g><circle cx="50" cy="51" r="14" fill="#f7ead0"/></svg></span>
+    <span class="nm">旅居小蜜</span><span class="kk">Journey Planner</span>
+  </div>
+
+  <div class="phonewrap">
+  <div class="pops" id="pops"></div>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screen">
+
+      <div class="scene sa" id="sa">
+        <div class="top"><div class="t1">携程旅行 · 西安</div><div class="search">🔍 西安 · 6月13-14 · 1间</div></div>
+        <div class="list-wrap"><div class="list" id="ctripList"></div></div>
+        <div class="qcard"><div class="q">这么多家…<br><em>哪一家</em>去景点才最方便？</div></div>
+      </div>
+
+      <div class="scene sb" id="sb">
+        <div class="wx-head"><span class="back">‹</span><span class="title">旅居小蜜 Journey Planner</span></div>
+        <div class="wx-body">
+          <span class="wx-time">下午 16:20</span>
+          <div class="msg out" data-i="1"><div class="av me">我</div><div class="bub"><div class="shots">
+            <div class="shot"><img class="si" src="/attractions/zhonglou.jpg"><div class="sl"></div><div class="sl s2"></div></div>
+            <div class="shot"><img class="si" src="/attractions/datang.jpg"><div class="sl"></div><div class="sl s2"></div></div>
+            <div class="shot"><img class="si" src="/attractions/chengqiang.jpg"><div class="sl"></div><div class="sl s2"></div></div>
+          </div></div></div>
+          <div class="msg out" data-i="2"><div class="av me">我</div><div class="bub">都是我在看的酒店，帮我看看哪个去景点近～</div></div>
+          <div class="msg in" data-i="3"><img class="av" src="/avatar-bot.png" alt="小蜜"><div class="bub">收到！正在整理通勤 + 避雷，稍等～ 🐝</div></div>
+          <div class="msg in" data-i="4"><img class="av" src="/avatar-bot.png" alt="小蜜"><div class="bub" style="padding:8px"><div class="linkcard" id="linkcard">
+            <div class="lt">你的酒店对比已生成 🗺️</div>
+            <div class="lrow"><span class="lg">蜜</span><span class="ld">trip.neiland.xyz · 点开查看排名</span></div>
+          </div></div></div>
+        </div>
+      </div>
+
+      <div class="scene sc" id="sc"><iframe id="appframe" class="appframe" title="app"></iframe></div>
+
+      <div class="endcard" id="endcard">
+        <div class="et">离景点最近的那家<br><em>它帮你挑出来</em></div>
+        <div class="es">🐝 旅居小蜜 · 转发即整理</div>
+      </div>
+
+    </div>
+  </div>
+  </div>
+
+  <div class="caption" id="caption"><span class="c"></span></div>
+  <div class="replay" id="replay">↻ 重播</div>
+
+<script>
+  const IMG = n => `/attractions/${n}.jpg`;
+  const HOTELS = ['西安钟楼亚朵','大唐芙蓉花间堂','城墙根·云舍','回民街口精品','曲江丽呈华苑','高新智选假日','大雁塔禧玥','古城墙观景民宿'];
+  const THUMBS = ['zhonglou','datang','chengqiang','huimin','shaanbo','bingmayong','datang','chengqiang'];
+  const list = document.getElementById('ctripList');
+  HOTELS.forEach((h,i)=>{const d=document.createElement('div');d.className='htl';
+    d.innerHTML=`<img class="img" src="${IMG(THUMBS[i])}"><div class="info"><div class="nm">${h}</div>
+      <div class="sub">★ 4.${6-(i%4)} · 距市中心 ${1+i}km</div>
+      <div class="tags"><span class="tag">免费取消</span><span class="tag">含早</span></div></div>
+      <div class="price">¥${320+i*46}<b>起</b></div>`; list.appendChild(d);});
+  const pops=document.getElementById('pops');
+  const POS=[[20,70],[40,320],[10,560],[560,120],[585,400],[548,600]];
+  POS.forEach((p,i)=>{const s=document.createElement('div');s.className='pop';
+    s.style.left=p[0]+'px';s.style.top=p[1]+'px';s.style.animationDelay=(i*0.45)+'s';
+    s.textContent=HOTELS[i];pops.appendChild(s);});
+
+  const sa=document.getElementById('sa'),sb=document.getElementById('sb'),sc=document.getElementById('sc');
+  const cap=document.querySelector('#caption .c'),endcard=document.getElementById('endcard');
+  const appframe=document.getElementById('appframe');
+  let timers=[];
+  const at=(t,fn)=>timers.push(setTimeout(fn,t));
+  const say=t=>{cap.classList.remove('on');setTimeout(()=>{cap.textContent=t;cap.classList.add('on');},250);};
+  const onlyScene=s=>[sa,sb,sc].forEach(x=>x.classList.toggle('on',x===s));
+  const show=i=>{const m=document.querySelector(`.msg[data-i="${i}"]`);if(m)m.classList.add('show');};
+  function clickInApp(sel){try{const d=appframe.contentDocument;const el=d&&d.querySelector(sel);if(el){el.click();return true;}}catch(e){}return false;}
+
+  function reset(){
+    timers.forEach(clearTimeout);timers=[];
+    [sa,sb,sc].forEach(x=>x.classList.remove('on'));
+    sa.classList.remove('run','q','tap');sb.classList.remove('tap');pops.classList.remove('run');
+    document.querySelectorAll('.msg').forEach(m=>m.classList.remove('show'));
+    endcard.classList.remove('on');cap.classList.remove('on');
+    appframe.src='about:blank';
+  }
+  function run(){
+    reset();
+    appframe.src='/?uid=demo';   // 提前加载真实前端，等到幕C 已就绪
+    at(100,()=>{onlyScene(sa);void sa.offsetWidth;sa.classList.add('run');pops.classList.add('run');say('携程上酒店一大堆…');});
+    at(2600,()=>say('XX酒店、XX酒店…挑花眼 😵'));
+    at(5200,()=>{sa.classList.add('q');say('到底哪家去景点最方便？');});
+    at(8000,()=>{onlyScene(sb);pops.classList.remove('run');say('把截图一股脑发给旅居小蜜');});
+    at(8500,()=>show(1));at(9200,()=>show(2));
+    at(10200,()=>{show(3);say('它说：收到～马上整理 ✅');});
+    at(12000,()=>{show(4);say('甩来一个链接，点开 👇');});
+    at(13600,()=>sb.classList.add('tap'));
+    at(14600,()=>{onlyScene(sc);say('打开就是你的候选酒店地图（已选大唐不夜城·钟楼）');});
+    at(17600,()=>{clickInApp('.b-seg .half.r');say('酒店按通勤排名 + 避雷，一目了然');});
+    at(21200,()=>{endcard.classList.add('on');say('🐝 旅居小蜜 · 离景点最近的那家');});
+  }
+  document.getElementById('replay').onclick=run;
+  run();
+</script>
+</body>
+</html>
