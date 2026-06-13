@@ -34,7 +34,8 @@ body {
 .pbtn .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2}
 .b-city{width:80px;height:54px}
 .b-seg{width:108px;height:54px;margin-left:auto}
-.b-set,.b-imp{width:46px;height:60px}
+.b-set{width:46px;height:60px}
+.b-imp{width:62px;height:60px}
 .b-city .c{gap:4px;font-size:15px;font-weight:600}
 .b-city .c img{height:17px}
 .b-city .chev{font-size:10px;opacity:.6}
