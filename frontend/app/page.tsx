@@ -198,6 +198,22 @@ export default function Home() {
           mapStyle: AMAP_STYLE,
         })
         mapRef.current = map
+
+        // 景点 marker 在地图创建时同步放置，保证 AMap 已完全就绪
+        attractionMarkersRef.current.forEach(m => m.setMap(null))
+        attractionMarkersRef.current = []
+        attractions.forEach(a => {
+          const marker = new AMap.Marker({
+            position: [a.lng, a.lat],
+            title: a.name,
+            content: markerHTML(a.name, false),
+            offset: new AMap.Pixel(-13, -34),
+          })
+          marker.on('click', () => toggleSelectRef.current(a.id))
+          marker.setMap(map)
+          attractionMarkersRef.current.push(marker)
+        })
+
         setMapReady(n => n + 1)
       })
     })()
@@ -216,32 +232,6 @@ export default function Home() {
       <div style="background:${labelBg};color:${labelColor};padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-top:3px;box-shadow:0 1px 5px rgba(0,0,0,0.15);white-space:nowrap">${name}</div>
     </div>`
   }
-
-  // 景点 marker：只在 attractions/mapReady 变化时创建，不依赖 selected
-  useEffect(() => {
-    const tryRender = (retry = 0) => {
-      const AMap = AMapRef.current
-      const map = mapRef.current
-      if (!AMap || !map) {
-        if (retry < 20) setTimeout(() => tryRender(retry + 1), 300)
-        return
-      }
-      attractionMarkersRef.current.forEach(m => m.setMap(null))
-      attractionMarkersRef.current = []
-      attractions.forEach(a => {
-        const marker = new AMap.Marker({
-          position: [a.lng, a.lat],
-          title: a.name,
-          content: markerHTML(a.name, false),
-          offset: new AMap.Pixel(-13, -34),
-        })
-        marker.on('click', () => toggleSelectRef.current(a.id))
-        marker.setMap(map)
-        attractionMarkersRef.current.push(marker)
-      })
-    }
-    tryRender()
-  }, [attractions, mapReady])
 
   // 选中状态变化时只更新 marker DOM，不重建
   useEffect(() => {
