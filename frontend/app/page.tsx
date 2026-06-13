@@ -108,6 +108,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false)
   const [cityInput, setCityInput] = useState('')
   const [commuteMode, setCommuteMode] = useState<'transit' | 'driving' | 'walking'>('transit')
+  const [cardShowPhoto, setCardShowPhoto] = useState(true)
   // 当前模式下 hotelId -> attrId -> {min, walk, ride}（min 总耗时；walk/ride 用于比例条）
   const [commuteDetail, setCommuteDetail] = useState<Record<string, Record<string, Leg>>>({})
   const [matrixLoading, setMatrixLoading] = useState(false)
@@ -688,6 +689,24 @@ export default function Home() {
               ))}
             </div>
             <p className="text-xs mt-3 text-center" style={{ color: 'var(--ink-mid)' }}>切换后将重新计算真实路线时间</p>
+            <div className="mt-4 pt-4" style={{ borderTop: '1px dashed var(--cream)' }}>
+              <button
+                onClick={() => setCardShowPhoto(v => !v)}
+                className="w-full flex items-center gap-3 p-3 rounded-2xl border-2"
+                style={{ borderColor: 'var(--cream)' }}
+              >
+                <span className="text-2xl">{cardShowPhoto ? '🖼️' : '✨'}</span>
+                <div className="text-left flex-1">
+                  <div className="font-medium text-sm" style={{ color: 'var(--ink)' }}>景点卡片显示</div>
+                  <div className="text-xs" style={{ color: 'var(--ink-mid)' }}>{cardShowPhoto ? '当前：实景照片' : '当前：趣味图标'}</div>
+                </div>
+                <div className="relative w-11 h-6 rounded-full transition-colors flex-shrink-0"
+                  style={{ background: cardShowPhoto ? 'var(--primary)' : 'var(--cream)' }}>
+                  <div className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all"
+                    style={{ left: cardShowPhoto ? '22px' : '2px' }} />
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -871,11 +890,13 @@ export default function Home() {
               >
                 <span className="heart"><svg viewBox="0 0 24 24"><path d={HEART_D} /></svg></span>
                 <div className="pic">
-                  {ATTR_IMG[a.name]
-                    ? <img src={`/attractions/${ATTR_IMG[a.name]}.jpg`} alt={a.name} />
-                    : a.photo_url
-                      ? <img src={a.photo_url} alt={a.name} />
-                      : SCENIC[i % SCENIC.length]}
+                  {cardShowPhoto
+                    ? (ATTR_IMG[a.name]
+                        ? <img src={`/attractions/${ATTR_IMG[a.name]}.jpg`} alt={a.name} />
+                        : a.photo_url
+                          ? <img src={a.photo_url} alt={a.name} />
+                          : SCENIC[i % SCENIC.length])
+                    : SCENIC[i % SCENIC.length]}
                 </div>
                 <div className="ttl"><span className="pin">📍</span>{a.name}</div>
               </div>
