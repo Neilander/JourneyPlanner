@@ -58,8 +58,9 @@ body {
 
 .xm-cards{position:absolute;left:0;right:0;bottom:54px;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;
   padding:52px calc(50% - 61px) 22px;scroll-snap-type:x mandatory;
-  -webkit-overflow-scrolling:touch;scrollbar-width:none;perspective:1000px;cursor:grab;
-  touch-action:pan-x;user-select:none;-webkit-user-select:none}
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;cursor:grab;
+  touch-action:pan-x;user-select:none;-webkit-user-select:none;
+  will-change:scroll-position;transform:translateZ(0)}
 .xm-cards.dragging{cursor:grabbing;scroll-snap-type:none}
 .xm-cards::-webkit-scrollbar{display:none}
 .acard{flex:0 0 122px;scroll-snap-align:center;position:relative;cursor:pointer;

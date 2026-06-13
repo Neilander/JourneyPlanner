@@ -376,29 +376,41 @@ export default function Home() {
     const cards = cardsRef.current
     if (!cards) return
     const items = () => Array.from(cards.querySelectorAll('.acard')) as HTMLElement[]
+
+    // 缓存卡片位置，避免 scroll 回调里反复触发 layout
+    let posCached: { left: number; w: number }[] = []
+    const cachePositions = () => {
+      posCached = items().map(c => ({ left: c.offsetLeft, w: c.offsetWidth }))
+    }
+
     const arc = () => {
       const center = cards.scrollLeft + cards.clientWidth / 2
       const span = cards.clientWidth * 0.42
-      for (const card of items()) {
-        const cc = card.offsetLeft + card.offsetWidth / 2
+      const els = items()
+      for (let i = 0; i < els.length; i++) {
+        const pos = posCached[i] ?? { left: els[i].offsetLeft, w: els[i].offsetWidth }
+        const cc = pos.left + pos.w / 2
         const d = Math.max(-1.4, Math.min(1.4, (cc - center) / span))
         const dd = Math.min(1, d * d)
-        const lift = -(1 - dd) * 24   // 中间卡上抬，两侧归位（不向下越界，避免被裁）
-        card.style.transform =
+        const lift = -(1 - dd) * 24
+        els[i].style.transform =
           `translateY(${lift.toFixed(1)}px) rotate(${(d * 11).toFixed(2)}deg) scale(${(1 - Math.abs(d) * 0.08).toFixed(3)})`
       }
     }
+
     let raf = 0
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; arc(); updateDots() }) }
+
+    // touch 设备跳过 JS drag，交给浏览器原生 touch 滚动处理（更流畅）
     const ds = dragRef.current
     const onDown = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return
       ds.down = true; ds.moved = false; ds.sx = e.clientX; ds.sl = cards.scrollLeft
     }
     const onMove = (e: PointerEvent) => {
-      if (!ds.down) return
+      if (e.pointerType === 'touch' || !ds.down) return
       const dx = e.clientX - ds.sx
       if (!ds.moved && Math.abs(dx) > 4) {
-        // 越过阈值才认定为拖拽：此时才捕获指针（纯点击不捕获，click 才能落到卡片）
         ds.moved = true
         cards.classList.add('dragging')
         cards.setPointerCapture?.(e.pointerId)
@@ -406,7 +418,7 @@ export default function Home() {
       if (ds.moved) cards.scrollLeft = ds.sl - dx
     }
     const endDrag = (e: PointerEvent) => {
-      if (!ds.down) return
+      if (e.pointerType === 'touch' || !ds.down) return
       ds.down = false; cards.classList.remove('dragging')
       try { cards.releasePointerCapture?.(e.pointerId) } catch {}
       const center = cards.scrollLeft + cards.clientWidth / 2
@@ -430,14 +442,15 @@ export default function Home() {
       const p = max > 0 ? Math.round(cards.scrollLeft / max * (PAGES - 1)) : 0
       dotsEl.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === p))
     }
+    const onResize = () => { cachePositions(); arc() }
     cards.addEventListener('scroll', onScroll, { passive: true })
     cards.addEventListener('pointerdown', onDown)
     cards.addEventListener('pointermove', onMove)
     cards.addEventListener('pointerup', endDrag)
     cards.addEventListener('pointercancel', endDrag)
     cards.addEventListener('wheel', onWheel, { passive: false })
-    window.addEventListener('resize', arc)
-    requestAnimationFrame(() => { arc(); updateDots() })
+    window.addEventListener('resize', onResize)
+    requestAnimationFrame(() => { cachePositions(); arc(); updateDots() })
     return () => {
       cards.removeEventListener('scroll', onScroll)
       cards.removeEventListener('pointerdown', onDown)
@@ -445,7 +458,7 @@ export default function Home() {
       cards.removeEventListener('pointerup', endDrag)
       cards.removeEventListener('pointercancel', endDrag)
       cards.removeEventListener('wheel', onWheel)
-      window.removeEventListener('resize', arc)
+      window.removeEventListener('resize', onResize)
     }
   }, [attractions])
 
