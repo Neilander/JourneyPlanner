@@ -3,7 +3,7 @@
 :root {
   --base:    #F5E9C8;
   --surface: #FBF4DD;
-  --panel:   #E4CFA0;   /* 上下边栏底色，比地图略深的暖沙色 */
+  --panel:   #EDE5C8;   /* 上下边栏底色，比地图浅米白略深一档 */
   --primary: #6FA04A;
   --accent:  #E0883C;
   --blue:    #8FB8C4;

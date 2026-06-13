@@ -153,7 +153,19 @@ export default function Home() {
 
   useEffect(() => {
     const uid = new URLSearchParams(window.location.search).get('uid')
-    if (!uid) return
+
+    // 无论有无 uid，都先拉默认城市的景点数据（获取 photo_url）
+    if (!uid) {
+      fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(cityName)}`)
+        .then(r => r.json())
+        .then(info => {
+          if (info.attractions?.length > 0) setAttractions(info.attractions)
+          if (info.center) setMapCenter([info.center.lng, info.center.lat])
+        })
+        .catch(() => {})
+      return
+    }
+
     uidRef.current = uid
 
     loadHotels(uid, true).then(hasPending => {
@@ -532,7 +544,7 @@ export default function Home() {
       )}
 
       {/* Header — 小蜜鼓边顶栏 */}
-      <div className="px-3 py-2.5" style={{ background: 'var(--panel)', borderBottom: '1px solid rgba(74,59,38,.2)', paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}>
+      <div className="px-3 py-2.5" style={{ background: 'var(--panel)', boxShadow: '0 2px 12px rgba(120,90,30,.18)', paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}>
         <div className="xm-topbar">
           {/* 城市 */}
           <button className="pbtn b-city" onClick={() => setShowCityPicker(true)}>
