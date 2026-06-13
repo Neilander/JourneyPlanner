@@ -604,17 +604,39 @@ export default function Home() {
               </button>
             </div>
             <div className="overflow-y-auto">
-              {searchResults.map(p => (
-                <div
-                  key={p.id}
-                  onClick={() => addHotel(p)}
-                  className="flex flex-col px-4 py-3 border-b cursor-pointer"
-                  style={{ borderColor: 'var(--cream)' }}
-                >
-                  <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{p.name}</span>
-                  <span className="text-xs mt-0.5" style={{ color: 'var(--ink-mid)' }}>{p.address}</span>
-                </div>
-              ))}
+              {selectedAttractions.length > 0 && searchResults.length > 0 && (
+                <p className="text-xs px-4 py-2" style={{ color: 'var(--ink-mid)', borderBottom: '1px solid var(--cream)' }}>
+                  已选 {selectedAttractions.length} 个景点 · 右侧为估算平均通勤时长
+                </p>
+              )}
+              {searchResults.map(p => {
+                let avgMin: number | null = null
+                if (selectedAttractions.length > 0 && p.lat && p.lng) {
+                  const meta = MODE_META[commuteMode] ?? MODE_META.transit
+                  const sum = selectedAttractions.reduce((acc, a) =>
+                    acc + Math.round(distanceKm(p.lat, p.lng, a.lat, a.lng) / meta.speed * 60), 0)
+                  avgMin = Math.round(sum / selectedAttractions.length)
+                }
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => addHotel(p)}
+                    className="flex items-center gap-2 px-4 py-3 border-b cursor-pointer"
+                    style={{ borderColor: 'var(--cream)' }}
+                  >
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{p.name}</span>
+                      <span className="text-xs mt-0.5" style={{ color: 'var(--ink-mid)' }}>{p.address}</span>
+                    </div>
+                    {avgMin != null && (
+                      <div className="flex-shrink-0 text-right">
+                        <div className="text-base font-bold" style={{ color: 'var(--accent)', lineHeight: 1 }}>{avgMin}</div>
+                        <div className="text-xs" style={{ color: 'var(--ink-mid)' }}>min均</div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
               {searchResults.length === 0 && !searching && searchKeyword && (
                 <p className="text-center text-sm py-8" style={{ color: 'var(--ink-mid)' }}>没有找到结果</p>
               )}
