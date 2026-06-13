@@ -385,20 +385,6 @@ export default function Home() {
 
     const arc = () => {
       const els = items()
-      if (window.innerWidth >= 768) {
-        const center = cards.scrollLeft + cards.clientWidth / 2
-        const span = cards.clientWidth * 0.35
-        for (let i = 0; i < els.length; i++) {
-          const pos = posCached[i] ?? { left: els[i].offsetLeft, w: els[i].offsetWidth }
-          const dist = Math.abs(pos.left + pos.w / 2 - center)
-          const t = Math.max(0, 1 - dist / span)
-          const scale = 1 + t * 0.18
-          const lift = -t * 8
-          els[i].style.transform = `translateY(${lift.toFixed(1)}px) scale(${scale.toFixed(3)})`
-          els[i].style.zIndex = String(Math.round(t * 10))
-        }
-        return
-      }
       const center = cards.scrollLeft + cards.clientWidth / 2
       const span = cards.clientWidth * 0.42
       for (let i = 0; i < els.length; i++) {
@@ -407,8 +393,11 @@ export default function Home() {
         const d = Math.max(-1.4, Math.min(1.4, (cc - center) / span))
         const dd = Math.min(1, d * d)
         const lift = -(1 - dd) * 24
+        // 中间 scale 1.12，两侧收到 0.82
+        const scale = 1.12 - Math.abs(d) * 0.22
         els[i].style.transform =
-          `translateY(${lift.toFixed(1)}px) rotate(${(d * 11).toFixed(2)}deg) scale(${(1 - Math.abs(d) * 0.08).toFixed(3)})`
+          `translateY(${lift.toFixed(1)}px) rotate(${(d * 11).toFixed(2)}deg) scale(${scale.toFixed(3)})`
+        els[i].style.zIndex = String(Math.round((1 - Math.abs(d)) * 10))
       }
     }
 

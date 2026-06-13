@@ -62,23 +62,6 @@ body {
   touch-action:pan-x;user-select:none;-webkit-user-select:none;
   will-change:scroll-position;transform:translateZ(0)}
 
-/* ── 桌面端：平铺底栏，不做扇形 ── */
-@media (min-width: 768px) {
-  .xm-dock { height: 148px }
-  .xm-tray-bg { height: 148px }
-  .xm-cards {
-    bottom: 36px;
-    padding: 10px 14px 10px;
-    gap: 10px;
-    scroll-snap-type: none;
-    cursor: default;
-  }
-  .xm-cards.dragging { cursor: default }
-  .acard { flex: 0 0 100px; border-radius: 14px; padding: 6px 6px 8px }
-  .acard .pic { height: 80px; border-radius: 10px; font-size: 30px }
-  .acard .ttl { font-size: 12px; margin-top: 6px }
-  .xm-dots { display: none }
-}
 .xm-cards.dragging{cursor:grabbing;scroll-snap-type:none}
 .xm-cards::-webkit-scrollbar{display:none}
 .acard{flex:0 0 122px;scroll-snap-align:center;position:relative;cursor:pointer;
