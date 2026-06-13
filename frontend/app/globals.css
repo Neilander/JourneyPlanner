@@ -67,9 +67,10 @@ body {
   box-shadow:0 8px 16px -6px rgba(80,62,30,.32), inset 0 0 0 1px rgba(255,255,255,.5);
   transition:background .35s ease;will-change:transform}
 .acard.liked{background:var(--gold)}
-.acard .pic{height:150px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+.acard .pic{height:150px;border-radius:13px;display:flex;align-items:center;justify-content:center;overflow:hidden;
   font-size:46px;background:radial-gradient(120% 100% at 50% 0,#eef2e0,#e3ead6);
   box-shadow:inset 0 0 0 1px rgba(120,100,60,.10)}
+.acard .pic img{width:100%;height:100%;object-fit:cover;display:block}
 .acard.liked .pic{background:radial-gradient(120% 100% at 50% 0,#fbeec0,#f6e4ad)}
 .acard .heart{position:absolute;top:11px;right:12px;z-index:3;width:21px;height:21px;color:#c2b187}
 .acard.liked .heart{color:#e0524a}

@@ -28,6 +28,11 @@ const D_SET = "M32.4,11.0 C63.7,1.0 91.1,1.8 125.0,13.2 C135.5,13.2 144.3,22.5 1
 const D_IMP = "M28.7,8.8 C58.2,-0.0 95.1,-0.2 122.4,9.1 C136.1,12.9 145.3,20.4 145.6,33.6 C150.4,72.8 158.5,126.0 144.7,166.3 C142.0,177.1 138.5,186.2 125.2,189.3 C95.6,199.0 64.4,200.7 29.3,192.3 C18.9,185.6 11.1,177.0 10.2,165.7 C1.6,127.6 -1.7,69.8 11.0,38.9 C13.8,23.8 19.6,12.7 28.7,8.8 Z"
 const HEART_D = "M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.5 5.2 5.5c1.9 0 3.2 1.1 3.8 2.3l.5 1 .5-1c.6-1.2 1.9-2.3 3.8-2.3 3.2 0 4.6 3.4 3.2 6.2C19.5 16.4 12 21 12 21z"
 const SCENIC = ['🏞️','⛩️','🏯','🌅','🌉','🗼','🏝️','⛰️','🌸','🛕']
+// 景点名 → 已下载的图片文件名（public/attractions/*.jpg）；先做了西安一城，匹配不到回退 emoji
+const ATTR_IMG: Record<string, string> = {
+  '大唐不夜城': 'datang', '钟楼': 'zhonglou', '兵马俑': 'bingmayong',
+  '城墙': 'chengqiang', '陕西历史博物馆': 'shaanbo', '回民街': 'huimin',
+}
 // 比例条：步行段固定绿色；乘车段标签/颜色随当前模式
 const WALK_COLOR = '#6fa04a'
 const MODE_META: Record<string, { rideLabel: string; rideColor: string; speed: number; walkShare: number }> = {
@@ -804,7 +809,11 @@ export default function Home() {
                 onClick={() => { if (!dragRef.current.moved) toggleSelect(a.id) }}
               >
                 <span className="heart"><svg viewBox="0 0 24 24"><path d={HEART_D} /></svg></span>
-                <div className="pic">{SCENIC[i % SCENIC.length]}</div>
+                <div className="pic">
+                  {ATTR_IMG[a.name]
+                    ? <img src={`/attractions/${ATTR_IMG[a.name]}.jpg`} alt={a.name} />
+                    : SCENIC[i % SCENIC.length]}
+                </div>
                 <div className="ttl"><span className="pin">📍</span>{a.name}</div>
               </div>
             ))}

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小红书封面 · JourneyPlanner</title>
+<link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --beige:#efe6cf;          /* 纯色米色背景 */
+    --ink:#4a3b26; --ink2:#7a6648;
+    --accent:#e0883c;
+    --wx-bg:#ededed;          /* 微信聊天背景 */
+    --wx-bar:#f7f7f7;         /* 微信顶/底栏 */
+    --wx-green:#95ec69;       /* 微信发出气泡 */
+    --font:'LXGW WenKai','LXGW WenKai TC',sans-serif;
+    --display:'ZCOOL KuaiLe',var(--font);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#cfc3a5;display:flex;justify-content:center;align-items:flex-start;padding:20px;font-family:var(--font)}
+  /* 自适应缩放：屏幕上缩小显示，导出仍是 1080×1440 原尺寸 */
+  .stage{position:relative}
+  .stage > .cover{transform-origin:top left}
+
+  /* ===== 封面画布 1080×1440 (3:4) ===== */
+  .cover{width:1080px;height:1440px;background:var(--beige);position:relative;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center}
+
+  /* 两台手机 */
+  .phones{display:flex;gap:64px;justify-content:center;align-items:flex-end;margin-top:150px}
+  .phone{width:404px;height:858px;border-radius:52px;background:#1b1b1f;padding:13px;position:relative;
+    box-shadow:0 50px 90px -30px rgba(60,45,20,.55), 0 14px 30px -12px rgba(60,45,20,.4),
+      inset 0 0 0 2px rgba(255,255,255,.12)}
+  .phone.tilt-l{transform:rotate(-3deg) translateY(10px)}
+  .phone.tilt-r{transform:rotate(3deg)}
+  .screen{width:100%;height:100%;border-radius:40px;overflow:hidden;position:relative;background:#fff}
+  .notch{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:120px;height:26px;
+    background:#1b1b1f;border-radius:0 0 16px 16px;z-index:20}
+
+  /* 左：前端 iframe（实时显示我们的 app）*/
+  .screen iframe{border:0;width:378px;height:832px;display:block}
+
+  /* ===== 右：模拟微信聊天 ===== */
+  .wx{width:100%;height:100%;display:flex;flex-direction:column;background:var(--wx-bg);font-family:var(--font)}
+  .wx-status{height:30px;background:var(--wx-bar);display:flex;align-items:center;justify-content:space-between;
+    padding:0 22px 0 26px;font-size:14px;font-weight:600;color:#111}
+  .wx-status .r{display:flex;gap:6px;align-items:center;font-size:12px}
+  .wx-head{height:56px;background:var(--wx-bar);display:flex;align-items:center;justify-content:center;position:relative;
+    border-bottom:1px solid #dcdcdc}
+  .wx-head .back{position:absolute;left:14px;font-size:24px;color:#181818;line-height:1}
+  .wx-head .more{position:absolute;right:16px;font-size:22px;color:#181818;letter-spacing:2px}
+  .wx-head .title{font-size:17px;font-weight:600;color:#111}
+  .wx-body{flex:1;padding:18px 16px;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+  .wx-time{align-self:center;font-size:11px;color:#9a9a9a;background:#dcdcdc;border-radius:4px;padding:2px 7px}
+
+  .row{display:flex;gap:10px;align-items:flex-start;max-width:84%}
+  .row.in{align-self:flex-start}
+  .row.out{align-self:flex-end;flex-direction:row-reverse}
+  .avatar{width:42px;height:42px;border-radius:6px;flex-shrink:0;object-fit:cover;background:#cfc3a5;
+    display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:700}
+  .avatar.bot{background:var(--accent)}
+  .avatar.me{background:#7aa05a}
+  .bubble{position:relative;padding:10px 13px;border-radius:6px;font-size:15.5px;line-height:1.5;color:#111;
+    word-break:break-word;box-shadow:0 1px 1px rgba(0,0,0,.04)}
+  .row.in .bubble{background:#fff}
+  .row.out .bubble{background:var(--wx-green)}
+  /* 气泡小尖角 */
+  .row.in .bubble::before{content:"";position:absolute;left:-5px;top:13px;border:6px solid transparent;border-right-color:#fff}
+  .row.out .bubble::before{content:"";position:absolute;right:-5px;top:13px;border:6px solid transparent;border-left-color:var(--wx-green)}
+
+  .wx-input{height:54px;background:var(--wx-bar);border-top:1px solid #dcdcdc;display:flex;align-items:center;gap:12px;padding:0 14px}
+  .wx-input .ic{font-size:22px;color:#444}
+  .wx-input .box{flex:1;height:36px;background:#fff;border-radius:7px}
+
+  /* ===== 标题 ===== */
+  .title-wrap{margin-top:64px;text-align:center;padding:0 80px}
+  .title{font-family:var(--display);font-size:62px;color:var(--ink);line-height:1.25;letter-spacing:1px}
+  .title .hl{color:var(--accent)}
+  .subtitle{margin-top:18px;font-size:30px;color:var(--ink2);font-weight:600}
+
+  /* 角标小蜜元素（可删）*/
+  .badge{position:absolute;top:62px;left:50%;transform:translateX(-50%);font-size:30px;color:var(--ink2);
+    font-weight:700;letter-spacing:2px;font-family:var(--display)}
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+  <div class="cover" id="cover">
+
+    <div class="badge">🐝 旅居小蜜 · JourneyPlanner</div>
+
+    <div class="phones">
+      <!-- 左：前端实时页面 -->
+      <div class="phone tilt-l">
+        <div class="notch"></div>
+        <div class="screen">
+          <iframe src="http://localhost:3000/" title="frontend"></iframe>
+        </div>
+      </div>
+
+      <!-- 右：模拟微信聊天 -->
+      <div class="phone tilt-r">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="wx">
+            <div class="wx-status"><span>9:41</span><span class="r">📶 🔋</span></div>
+            <div class="wx-head">
+              <span class="back">‹</span>
+              <span class="title">旅居小蜜 Journey Planner</span>
+              <span class="more">···</span>
+            </div>
+            <div class="wx-body" id="wxBody">
+              <span class="wx-time">上午 9:41</span>
+
+              <!-- ↓↓↓ 聊天内容占位，等你给真实文案我替换 ↓↓↓ -->
+              <div class="row in">
+                <div class="avatar bot" data-slot="bot-avatar">蜜</div>
+                <div class="bubble">你好呀～把心仪的酒店链接 / 截图发我，我帮你整理候选名单 🗺️</div>
+              </div>
+              <div class="row out">
+                <div class="avatar me" data-slot="me-avatar">我</div>
+                <div class="bubble">（占位）这是我想住的酒店链接</div>
+              </div>
+              <div class="row in">
+                <div class="avatar bot" data-slot="bot-avatar">蜜</div>
+                <div class="bubble">收到！已记录 ✅ 离你选的景点都很近，避雷分析也帮你做好啦</div>
+              </div>
+              <!-- ↑↑↑ 占位 ↑↑↑ -->
+            </div>
+            <div class="wx-input">
+              <span class="ic">🎙️</span><div class="box"></div><span class="ic">＋</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 标题（占位，等你给文案）-->
+    <div class="title-wrap">
+      <div class="title">转发酒店给 AI，<span class="hl">离景点最近</span>的那家<br>它帮你挑出来</div>
+      <div class="subtitle">多源整合 · 通勤排名 · 评论避雷</div>
+    </div>
+
+  </div>
+  </div>
+
+  <script>
+    const stage = document.getElementById('stage');
+    const cover = document.getElementById('cover');
+    function fit(){
+      const s = Math.min(1, (window.innerWidth - 40) / 1080, (window.innerHeight - 40) / 1440);
+      cover.style.transform = `scale(${s})`;
+      stage.style.width = (1080 * s) + 'px';
+      stage.style.height = (1440 * s) + 'px';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+  </script>
+</body>
+</html>
