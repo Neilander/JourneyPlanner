@@ -10,15 +10,15 @@ const API_BASE = 'https://api.neiland.xyz'
 // 地图配色样式 ID（高德个性化地图后台用 public/amap-style.json 生成后，替换这里即可）
 const AMAP_STYLE = 'amap://styles/b61be196980fb631b8ab0740ad73682a'
 
-const XIAN_CENTER: [number, number] = [108.9398, 34.3416]
+const DEFAULT_CENTER: [number, number] = [118.7969, 32.0603]
 
-const XIAN_ATTRACTIONS = [
-  { id: '1', name: '大唐不夜城', lng: 108.9605, lat: 34.2227 },
-  { id: '2', name: '钟楼',       lng: 108.9408, lat: 34.2582 },
-  { id: '3', name: '兵马俑',     lng: 109.2785, lat: 34.3843 },
-  { id: '4', name: '城墙',       lng: 108.9408, lat: 34.2600 },
-  { id: '5', name: '陕西历史博物馆', lng: 108.9417, lat: 34.2318 },
-  { id: '6', name: '回民街',     lng: 108.9340, lat: 34.2660 },
+const DEFAULT_ATTRACTIONS = [
+  { id: '1', name: '夫子庙',     lng: 118.7960, lat: 32.0213 },
+  { id: '2', name: '中山陵',     lng: 118.8604, lat: 32.0602 },
+  { id: '3', name: '玄武湖',     lng: 118.7987, lat: 32.0748 },
+  { id: '4', name: '明孝陵',     lng: 118.8506, lat: 32.0571 },
+  { id: '5', name: '鸡鸣寺',     lng: 118.7946, lat: 32.0655 },
+  { id: '6', name: '总统府',     lng: 118.7965, lat: 32.0535 },
 ]
 
 // 小蜜鼓边按钮形状（从原型烤出的固定路径）
@@ -94,9 +94,9 @@ export default function Home() {
   const [tab, setTab] = useState<'map' | 'rank'>('map')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [hotels, setHotels] = useState<Hotel[]>([])
-  const [attractions, setAttractions] = useState<Attraction[]>(XIAN_ATTRACTIONS)
-  const [cityName, setCityName] = useState('西安')
-  const [mapCenter, setMapCenter] = useState<[number, number]>(XIAN_CENTER)
+  const [attractions, setAttractions] = useState<Attraction[]>(DEFAULT_ATTRACTIONS)
+  const [cityName, setCityName] = useState('南京')
+  const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_CENTER)
   const [mapReady, setMapReady] = useState(0)  // bumped when map is recreated
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchResults, setSearchResults] = useState<Hotel[]>([])
@@ -127,21 +127,19 @@ export default function Home() {
       if (firstLoad) {
         // 恢复已选景点（按名称匹配）
         const savedNames: string[] = data.selected_attractions || []
-        const city = data.city || '西安'
+        const city = data.city || '南京'
         setCityName(city)
-        if (city !== '西安') {
-          const info = await fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(city)}`).then(r => r.json())
-          if (info.center) setMapCenter([info.center.lng, info.center.lat])
-          if (info.attractions?.length > 0) {
-            setAttractions(info.attractions)
-            const ids = new Set<string>(
-              info.attractions.filter((a: Attraction) => savedNames.includes(a.name)).map((a: Attraction) => a.id)
-            )
-            if (ids.size > 0) setSelected(ids)
-          }
+        const info = await fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(city)}`).then(r => r.json())
+        if (info.center) setMapCenter([info.center.lng, info.center.lat])
+        if (info.attractions?.length > 0) {
+          setAttractions(info.attractions)
+          const ids = new Set<string>(
+            info.attractions.filter((a: Attraction) => savedNames.includes(a.name)).map((a: Attraction) => a.id)
+          )
+          if (ids.size > 0) setSelected(ids)
         } else if (savedNames.length > 0) {
           const ids = new Set<string>(
-            XIAN_ATTRACTIONS.filter(a => savedNames.includes(a.name)).map(a => a.id)
+            DEFAULT_ATTRACTIONS.filter(a => savedNames.includes(a.name)).map(a => a.id)
           )
           if (ids.size > 0) setSelected(ids)
         }
