@@ -386,7 +386,17 @@ export default function Home() {
     const arc = () => {
       const els = items()
       if (window.innerWidth >= 768) {
-        for (const el of els) el.style.transform = ''
+        const center = cards.scrollLeft + cards.clientWidth / 2
+        const span = cards.clientWidth * 0.35
+        for (let i = 0; i < els.length; i++) {
+          const pos = posCached[i] ?? { left: els[i].offsetLeft, w: els[i].offsetWidth }
+          const dist = Math.abs(pos.left + pos.w / 2 - center)
+          const t = Math.max(0, 1 - dist / span)
+          const scale = 1 + t * 0.18
+          const lift = -t * 8
+          els[i].style.transform = `translateY(${lift.toFixed(1)}px) scale(${scale.toFixed(3)})`
+          els[i].style.zIndex = String(Math.round(t * 10))
+        }
         return
       }
       const center = cards.scrollLeft + cards.clientWidth / 2
