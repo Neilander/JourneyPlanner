@@ -96,7 +96,7 @@ export default function Home() {
   const [tab, setTab] = useState<'map' | 'rank'>('map')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [hotels, setHotels] = useState<Hotel[]>([])
-  const [attractions, setAttractions] = useState<Attraction[]>(DEFAULT_ATTRACTIONS)
+  const [attractions, setAttractions] = useState<Attraction[]>([])
   const [cityName, setCityName] = useState('南京')
   const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_CENTER)
   const [mapReady, setMapReady] = useState(0)  // bumped when map is recreated
