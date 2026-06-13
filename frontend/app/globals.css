@@ -63,13 +63,13 @@ body {
   will-change:scroll-position;transform:translateZ(0)}
 
 @media (min-width: 768px) {
-  .xm-dock  { height: 190px }
-  .xm-tray-bg { height: 172px }
-  .xm-cards { gap: 18px; bottom: 28px; padding: 28px calc(50% - 120px) 12px }
-  .acard { flex: 0 0 240px; border-radius: 18px; padding: 8px 8px 10px }
-  .acard .pic { height: 88px; border-radius: 12px; font-size: 40px }
-  .acard .ttl { font-size: 14px; margin-top: 8px }
-  .acard .heart { width: 24px; height: 24px; top: 11px; right: 12px }
+  .xm-dock  { height: 220px }
+  .xm-tray-bg { height: 200px }
+  .xm-cards { gap: 18px; bottom: 28px; padding: 48px calc(50% - 100px) 14px }
+  .acard { flex: 0 0 200px; border-radius: 22px; padding: 10px 10px 13px }
+  .acard .pic { height: 118px; border-radius: 15px; font-size: 52px }
+  .acard .ttl { font-size: 15px; margin-top: 10px }
+  .acard .heart { width: 26px; height: 26px; top: 13px; right: 14px }
 }
 
 .xm-cards.dragging{cursor:grabbing;scroll-snap-type:none}
