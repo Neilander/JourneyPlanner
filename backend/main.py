@@ -379,15 +379,17 @@ def parse_miniprogram(mp: dict) -> dict | None:
     return None
 
 
-def download_media(media_id: str, token: str) -> bytes | None:
-    """从微信KF接口下载图片"""
+def download_media(media_id: str, token: str, accept: str = "image") -> bytes | None:
+    """从微信KF接口下载媒体文件，accept 传 'image' 或 'audio' 过滤 Content-Type"""
     try:
         r = requests.get(
             "https://qyapi.weixin.qq.com/cgi-bin/media/get",
             params={"access_token": token, "media_id": media_id},
             timeout=10
         )
-        if r.status_code == 200 and r.headers.get("Content-Type", "").startswith("image"):
+        ct = r.headers.get("Content-Type", "")
+        print(f"[download_media] status={r.status_code} Content-Type={ct!r}")
+        if r.status_code == 200 and ct.startswith(accept):
             return r.content
     except Exception as e:
         print("download_media error:", e)
@@ -896,7 +898,7 @@ def process_messages(sync_token: str, open_kf_id: str):
             elif msgtype == "voice":
                 media_id = m.get("voice", {}).get("media_id", "")
                 if media_id:
-                    audio_bytes = download_media(media_id, token)
+                    audio_bytes = download_media(media_id, token, accept="audio")
                     if audio_bytes:
                         recognized = baidu_asr(audio_bytes)
                         if recognized:
