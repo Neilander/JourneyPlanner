@@ -56,12 +56,13 @@
 <header>
   <h1>Journey<span>Planner</span> · 多设备首屏预览</h1>
   <div class="urlbar">
-    <input id="url" value="https://trip.neiland.xyz/" spellcheck="false">
+    <input id="url" value="http://localhost:3000/" spellcheck="false">
     <button class="btn" onclick="applyUrl()">刷新全部</button>
   </div>
   <div class="quick">
-    <button onclick="setUrl('https://trip.neiland.xyz/')">默认（西安）</button>
-    <button onclick="setUrl('https://trip.neiland.xyz/?uid=demo')">?uid=demo</button>
+    <button onclick="setUrl('http://localhost:3000/')">本地（localhost）</button>
+    <button onclick="setUrl('http://localhost:3000/?uid=demo')">本地 ?uid=demo</button>
+    <button onclick="setUrl('https://trip.neiland.xyz/')">线上（trip）</button>
   </div>
   <label class="zoom">缩放 <input id="zoom" type="range" min="40" max="100" value="70" oninput="setZoom(this.value)"><span id="zlbl">70%</span></label>
 </header>
@@ -110,12 +111,16 @@
         <div class="frame ${d.type}" style="width:${dispW + (d.type==='phone'?16:d.type==='tablet'?20:2)}px">
           ${notch}${bar}
           <div class="scaleWrap" style="width:${dispW}px;height:${Math.round(innerH*s)}px">
-            <iframe loading="lazy" src="${baseUrl}"
+            <iframe loading="lazy" data-src="${baseUrl}"
               style="width:${d.w}px;height:${innerH}px;transform:scale(${s});transform-origin:top left"></iframe>
           </div>
         </div>
         <div class="label"><b>${d.name}</b><span class="res">${d.w} × ${d.h}</span></div>`;
       g.appendChild(wrap);
+    });
+    // 错峰加载：逐个隔 2.5s 再载入，避免同一高德 key 短时间多次加载撞 QPS/配额导致某屏空白
+    [...g.querySelectorAll('iframe')].forEach((f, i) => {
+      setTimeout(() => { f.src = f.dataset.src; }, i * 2500);
     });
   }
 

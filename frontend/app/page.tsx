@@ -468,7 +468,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col h-screen relative overflow-hidden mx-auto w-full" style={{ background: 'var(--base)', maxWidth: 480 }}>
+    <div className="flex flex-col h-screen relative overflow-hidden" style={{ background: 'var(--base)' }}>
       {/* City picker modal */}
       {showCityPicker && (
         <div className="absolute inset-0 bg-black/50 z-50 flex flex-col">

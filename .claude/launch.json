@@ -8,6 +8,12 @@
       "port": 8123
     },
     {
+      "name": "root-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8200"],
+      "port": 8200
+    },
+    {
       "name": "frontend",
       "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
       "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "-p", "3000"],
