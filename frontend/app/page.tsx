@@ -204,35 +204,53 @@ export default function Home() {
     return () => { cancelled = true; mapRef.current?.destroy() }
   }, [mapCenter, attractions])
 
-  // 景点 marker（选中状态变化时重绘，颜色联动）
+  const markerHTML = (name: string, isSel: boolean) => {
+    const pinColor = isSel ? '#E0883C' : '#4A7FBF'
+    const pinShadow = isSel ? 'rgba(224,136,60,0.5)' : 'rgba(74,127,191,0.45)'
+    const labelColor = isSel ? '#7a4010' : '#2d4f7a'
+    const labelBg = isSel ? '#fdf0e0' : 'white'
+    return `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
+      <div style="width:26px;height:26px;background:${pinColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px ${pinShadow};display:flex;align-items:center;justify-content:center">
+        <div style="width:10px;height:10px;background:white;border-radius:50%;transform:rotate(45deg)"></div>
+      </div>
+      <div style="background:${labelBg};color:${labelColor};padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-top:3px;box-shadow:0 1px 5px rgba(0,0,0,0.15);white-space:nowrap">${name}</div>
+    </div>`
+  }
+
+  // 景点 marker：只在 attractions/mapReady 变化时创建，不依赖 selected
   useEffect(() => {
-    const AMap = AMapRef.current
-    const map = mapRef.current
-    if (!AMap || !map) return
-    attractionMarkersRef.current.forEach(m => m.setMap(null))
-    attractionMarkersRef.current = []
-    attractions.forEach(a => {
-      const isSel = selected.has(a.id)
-      const pinColor = isSel ? '#E0883C' : '#4A7FBF'
-      const pinShadow = isSel ? 'rgba(224,136,60,0.5)' : 'rgba(74,127,191,0.45)'
-      const labelColor = isSel ? '#7a4010' : '#2d4f7a'
-      const labelBg = isSel ? '#fdf0e0' : 'white'
-      const marker = new AMap.Marker({
-        position: [a.lng, a.lat],
-        title: a.name,
-        content: `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
-          <div style="width:26px;height:26px;background:${pinColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px ${pinShadow};display:flex;align-items:center;justify-content:center">
-            <div style="width:10px;height:10px;background:white;border-radius:50%;transform:rotate(45deg)"></div>
-          </div>
-          <div style="background:${labelBg};color:${labelColor};padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-top:3px;box-shadow:0 1px 5px rgba(0,0,0,0.15);white-space:nowrap">${a.name}</div>
-        </div>`,
-        offset: new AMap.Pixel(-13, -34),
+    const tryRender = (retry = 0) => {
+      const AMap = AMapRef.current
+      const map = mapRef.current
+      if (!AMap || !map) {
+        if (retry < 20) setTimeout(() => tryRender(retry + 1), 300)
+        return
+      }
+      attractionMarkersRef.current.forEach(m => m.setMap(null))
+      attractionMarkersRef.current = []
+      attractions.forEach(a => {
+        const marker = new AMap.Marker({
+          position: [a.lng, a.lat],
+          title: a.name,
+          content: markerHTML(a.name, false),
+          offset: new AMap.Pixel(-13, -34),
+        })
+        marker.on('click', () => toggleSelectRef.current(a.id))
+        marker.setMap(map)
+        attractionMarkersRef.current.push(marker)
       })
-      marker.on('click', () => toggleSelectRef.current(a.id))
-      marker.setMap(map)
-      attractionMarkersRef.current.push(marker)
+    }
+    tryRender()
+  }, [attractions, mapReady])
+
+  // 选中状态变化时只更新 marker DOM，不重建
+  useEffect(() => {
+    attractions.forEach((a, i) => {
+      const marker = attractionMarkersRef.current[i]
+      if (!marker) return
+      marker.setContent(markerHTML(a.name, selected.has(a.id)))
     })
-  }, [attractions, mapReady, selected])
+  }, [selected])
 
   // Bot加载的酒店上图（等地图ready）
   useEffect(() => {
