@@ -413,7 +413,7 @@ export default function Home() {
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === 'touch' || !ds.down) return
       const dx = e.clientX - ds.sx
-      if (!ds.moved && Math.abs(dx) > 4) {
+      if (!ds.moved && Math.abs(dx) > 10) {
         ds.moved = true
         cards.classList.add('dragging')
         cards.setPointerCapture?.(e.pointerId)
