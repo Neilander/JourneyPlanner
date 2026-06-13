@@ -63,7 +63,10 @@ body {
   will-change:scroll-position;transform:translateZ(0)}
 
 @media (min-width: 768px) {
-  .xm-cards { gap: 48px; padding: 52px calc(50% - 61px) 22px }
+  .xm-dock  { height: 220px }
+  .xm-tray-bg { height: 200px }
+  .xm-cards { gap: 48px; bottom: 36px; padding: 34px calc(50% - 61px) 16px }
+  .acard .pic { height: 100px }
 }
 
 .xm-cards.dragging{cursor:grabbing;scroll-snap-type:none}
