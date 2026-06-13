@@ -26,6 +26,9 @@ body {
 
 /* ───────── 小蜜 · 鼓边顶栏按钮 ───────── */
 .xm-topbar{display:flex;align-items:center;gap:7px}
+@media (min-width: 768px) {
+  .xm-topbar{gap:0;justify-content:space-between}
+}
 .pbtn{position:relative;border:none;background:none;cursor:pointer;color:var(--ink);padding:0;flex-shrink:0;font-family:inherit}
 .pbtn > svg.shape{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 3px 3px rgba(74,59,38,.18))}
 .pbtn .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2}

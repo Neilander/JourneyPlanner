@@ -589,7 +589,7 @@ export default function Home() {
           {/* 导入 / 添加酒店 */}
           <button className="pbtn b-imp" onClick={() => setShowSearch(true)} title="添加酒店">
             <svg className="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill="var(--blue)" d={D_IMP} /></svg>
-            <span className="c stack"><img src="/icons/icon-download.png" alt="" /><span className="t">导入</span></span>
+            <span className="c stack"><img src="/icons/icon-download.png" alt="" /><span className="t">导入酒店</span></span>
           </button>
         </div>
       </div>
