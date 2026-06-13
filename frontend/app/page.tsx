@@ -103,6 +103,7 @@ export default function Home() {
   const [showSearch, setShowSearch] = useState(false)
   const [showCityPicker, setShowCityPicker] = useState(false)
   const [showHotelManager, setShowHotelManager] = useState(false)
+  const [dockOpen, setDockOpen] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   const [cityInput, setCityInput] = useState('')
   const [commuteMode, setCommuteMode] = useState<'transit' | 'driving' | 'walking'>('transit')
@@ -807,8 +808,19 @@ export default function Home() {
         </div>
       )}
 
+      {/* 卷轴收起按钮 — dock 收起后仍可见 */}
+      <button
+        className={`xm-scroll-btn${dockOpen ? '' : ' rolled'}`}
+        onClick={() => setDockOpen(o => !o)}
+        title={dockOpen ? '收起景点栏' : '展开景点栏'}
+      >
+        <span className="xm-scroll-icon">
+          {dockOpen ? '⟨' : '⟩'}
+        </span>
+      </button>
+
       {/* Bottom 浮层底板 — 盖在地图上，卡牌可探出 */}
-      <div className="xm-dock">
+      <div className={`xm-dock${dockOpen ? '' : ' xm-dock-rolled'}`}>
         {/* 底板背景（波浪上沿 + 实底） */}
         <div className="xm-tray-bg">
           <svg viewBox="0 0 390 188" preserveAspectRatio="none">
