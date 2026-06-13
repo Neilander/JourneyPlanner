@@ -549,8 +549,8 @@ PERSONA_PROMPT = """你是「旅途向导」，一个旅行规划小助手。风
 - 分析数据非实时，仅供参考
 
 【回复规则】
-- 100字以内，像写便签一样干净
-- 旅行问题认真回答；闲聊顺着聊几句再带回旅行
+- 80字以内，像写便签一样干净
+- 只回答旅行、酒店、景点、交通相关问题；与旅行无关的话题一句话拒绝：「我只会旅行相关的事～」
 - 只说确定的事，不编造数据
 - 用户问「怎么用」「有什么功能」，用上面的内容简洁回答"""
 
@@ -561,7 +561,7 @@ def deepseek_chat(user_msg: str) -> str:
         r = requests.post(
             "https://api.deepseek.com/chat/completions",
             headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
-            json={"model": "deepseek-chat", "max_tokens": 200,
+            json={"model": "deepseek-chat", "max_tokens": 120,
                   "messages": [{"role": "system", "content": PERSONA_PROMPT},
                                 {"role": "user",   "content": user_msg}]},
             timeout=15
@@ -593,6 +593,10 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
     bot_state = user["bot_state"]
     hotel_count = get_hotel_count(user["id"])
     intent, delete_target = classify_intent(text, msgtype)
+
+    # 非闲聊意图时重置连续闲聊计数
+    if intent != "chitchat":
+        kv_set(f"offtopic:{user_id}", "0")
 
     # ── 状态1：Onboarding（首次进入）────────────────────────────────────────
     if bot_state == 1:
@@ -750,6 +754,21 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
     if deny:
         send_text(open_kfid, user_id, deny)
         return
+
+    # 连续闲聊计数
+    offtopic_key = f"offtopic:{user_id}"
+    offtopic_count = int(kv_get(offtopic_key) or "0") + 1
+    kv_set(offtopic_key, str(offtopic_count))
+
+    if offtopic_count >= 3:
+        send_text(open_kfid, user_id, "我只能帮你搞定旅行相关的事哦～发个酒店或告诉我你要去哪里？")
+        return
+    if offtopic_count == 2:
+        log_usage(user_id, "deepseek")
+        reply = deepseek_chat(text) + "\n\n（我主要负责旅行规划，有什么行程问题吗？）"
+        send_text(open_kfid, user_id, reply)
+        return
+
     log_usage(user_id, "deepseek")
     reply = deepseek_chat(text)
     send_text(open_kfid, user_id, reply)
