@@ -1667,16 +1667,21 @@ async def city_info(city: str):
             "key": AMAP_WEB_KEY, "keywords": city + "景点",
             "city": city, "citylimit": "true",
             "types": "110000", "offset": 10, "output": "json",
+            "extensions": "all",
         }, timeout=5).json()
         for i, p in enumerate(r.get("pois", [])):
             if not p.get("location"):
                 continue
             lng, lat = p["location"].split(",")
+            # 取第一张照片 URL（extensions=all 时 photos 字段存在）
+            photos = p.get("photos") or []
+            photo_url = photos[0].get("url") if photos else None
             attractions.append({
                 "id": str(i + 1),
                 "name": p["name"],
                 "lng": float(lng),
                 "lat": float(lat),
+                "photo_url": photo_url,
             })
     except Exception as e:
         print("attractions error:", e)

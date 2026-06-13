@@ -46,6 +46,7 @@ interface Attraction {
   name: string
   lng: number
   lat: number
+  photo_url?: string
 }
 
 // 一段通勤的耗时拆分（后端 /api/commute/matrix 返回）
@@ -862,7 +863,9 @@ export default function Home() {
                 <div className="pic">
                   {ATTR_IMG[a.name]
                     ? <img src={`/attractions/${ATTR_IMG[a.name]}.jpg`} alt={a.name} />
-                    : SCENIC[i % SCENIC.length]}
+                    : a.photo_url
+                      ? <img src={a.photo_url} alt={a.name} />
+                      : SCENIC[i % SCENIC.length]}
                 </div>
                 <div className="ttl"><span className="pin">📍</span>{a.name}</div>
               </div>
