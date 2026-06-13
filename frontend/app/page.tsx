@@ -533,7 +533,7 @@ export default function Home() {
       )}
 
       {/* Header — 小蜜鼓边顶栏 */}
-      <div className="px-3 py-2.5" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--cream)' }}>
+      <div className="px-3 py-2.5" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--cream)', paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}>
         <div className="xm-topbar">
           {/* 城市 */}
           <button className="pbtn b-city" onClick={() => setShowCityPicker(true)}>

@@ -12,6 +12,7 @@ const zcoolKuaiLe = ZCOOL_KuaiLe({
 export const metadata: Metadata = {
   title: "旅途向导",
   description: "酒店通勤助手",
+  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
 };
 
 export default function RootLayout({
