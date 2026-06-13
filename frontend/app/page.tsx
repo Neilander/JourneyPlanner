@@ -736,7 +736,11 @@ export default function Home() {
               {hotels.map(h => (
                 <div key={h.id} className="px-4 py-3 border-b" style={{ borderColor: 'var(--cream)' }}>
                   <div className="flex items-center">
-                    <span className="flex-1 text-sm font-medium" style={{ color: 'var(--ink)' }}>{h.name}</span>
+                    <span
+                      className="flex-1 text-sm font-medium cursor-pointer"
+                      style={{ color: 'var(--ink)' }}
+                      onClick={() => { setShowHotelManager(false); mapRef.current?.setCenter([h.lng, h.lat]); mapRef.current?.setZoom(15) }}
+                    >{h.name} <span style={{ fontSize: 10, color: 'var(--ink-mid)' }}>🗺</span></span>
                     {h.analysis?.amap_rating && (
                       <span className={`text-xs font-bold mr-2 ${h.analysis.amap_rating >= 4.5 ? 'text-green-600' : h.analysis.amap_rating >= 4.0 ? 'text-orange-500' : 'text-red-500'}`}>
                         ★ {h.analysis.amap_rating}
@@ -886,7 +890,11 @@ export default function Home() {
               <div
                 key={a.id}
                 className={`acard${selected.has(a.id) ? ' liked' : ''}`}
-                onClick={() => { if (!dragRef.current.moved) toggleSelect(a.id) }}
+                onClick={() => {
+                  if (dragRef.current.moved) return
+                  toggleSelect(a.id)
+                  mapRef.current?.setCenter([a.lng, a.lat])
+                }}
               >
                 <span className="heart"><svg viewBox="0 0 24 24"><path d={HEART_D} /></svg></span>
                 <div className="pic">
