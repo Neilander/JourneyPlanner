@@ -432,6 +432,37 @@ def baidu_ocr(image_bytes: bytes) -> str:
         print("baidu_ocr error:", e)
         return ""
 
+def baidu_asr(audio_bytes: bytes) -> str | None:
+    """百度短语音识别（AMR 格式），返回识别文字或 None"""
+    if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
+        return None
+    try:
+        token = get_baidu_ocr_token()
+        if not token:
+            return None
+        r = requests.post(
+            "https://vop.baidu.com/server_api",
+            json={
+                "format": "amr",
+                "rate": 8000,
+                "channel": 1,
+                "cuid": "journeyplanner_kf",
+                "token": token,
+                "speech": base64.b64encode(audio_bytes).decode(),
+                "len": len(audio_bytes),
+            },
+            timeout=12
+        ).json()
+        if r.get("err_no") == 0 and r.get("result"):
+            text = r["result"][0].strip()
+            print(f"[baidu_asr] 识别结果: {text!r}")
+            return text
+        print(f"[baidu_asr] err_no={r.get('err_no')} err_msg={r.get('err_msg')}")
+        return None
+    except Exception as e:
+        print(f"[baidu_asr] error: {e}")
+        return None
+
 def parse_hotel_image(image_bytes: bytes) -> dict | None:
     """OCR截图文字 → DeepSeek提取酒店结构化信息"""
     if not image_bytes:
@@ -862,6 +893,18 @@ def process_messages(sync_token: str, open_kf_id: str):
                 media_id = m.get("image", {}).get("media_id", "")
                 img_bytes = download_media(media_id, token) if media_id else None
                 handle_user_message(open_kf_id, user_id, "", msgtype, image_bytes=img_bytes)
+            elif msgtype == "voice":
+                media_id = m.get("voice", {}).get("media_id", "")
+                if media_id:
+                    audio_bytes = download_media(media_id, token)
+                    if audio_bytes:
+                        recognized = baidu_asr(audio_bytes)
+                        if recognized:
+                            handle_user_message(open_kf_id, user_id, recognized, "text")
+                        else:
+                            send_text(open_kf_id, user_id, "语音没听清，麻烦发文字给我 😊")
+                    else:
+                        send_text(open_kf_id, user_id, "语音下载失败，请重新发送或改用文字 😊")
             else:
                 continue
 
