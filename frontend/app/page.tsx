@@ -532,7 +532,7 @@ export default function Home() {
       )}
 
       {/* Header — 小蜜鼓边顶栏 */}
-      <div className="px-3 py-2.5" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--cream)', paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}>
+      <div className="px-3 py-2.5" style={{ background: 'var(--panel)', borderBottom: '1px solid rgba(74,59,38,.2)', paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}>
         <div className="xm-topbar">
           {/* 城市 */}
           <button className="pbtn b-city" onClick={() => setShowCityPicker(true)}>
@@ -845,7 +845,7 @@ export default function Home() {
         {/* 底板背景（波浪上沿 + 实底） */}
         <div className="xm-tray-bg">
           <svg viewBox="0 0 390 188" preserveAspectRatio="none">
-            <path d="M0,30 C60,12 110,6 170,20 C210,30 250,38 305,24 C335,16 362,14 390,22 L390,188 L0,188 Z" fill="var(--surface)" />
+            <path d="M0,30 C60,12 110,6 170,20 C210,30 250,38 305,24 C335,16 362,14 390,22 L390,188 L0,188 Z" fill="var(--panel)" />
           </svg>
         </div>
         {/* 卡牌（z 在底板之上，可探出） */}

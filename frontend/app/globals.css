@@ -3,6 +3,7 @@
 :root {
   --base:    #F5E9C8;
   --surface: #FBF4DD;
+  --panel:   #C8A96E;   /* 上下边栏底色，比地图明显更深的暖金棕 */
   --primary: #6FA04A;
   --accent:  #E0883C;
   --blue:    #8FB8C4;
@@ -141,8 +142,8 @@ body {
   height: 64px;
   border: none;
   border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 2px 10px rgba(80,62,30,.22), inset 0 0 0 1px rgba(255,255,255,.5);
+  background: var(--panel);
+  box-shadow: 0 2px 10px rgba(80,62,30,.22), inset 0 0 0 1px rgba(255,255,255,.3);
   cursor: pointer;
   display: flex;
   align-items: center;
