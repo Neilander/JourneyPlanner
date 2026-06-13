@@ -1676,6 +1676,8 @@ async def city_info(city: str):
             # 取第一张照片 URL（extensions=all 时 photos 字段存在）
             photos = p.get("photos") or []
             photo_url = photos[0].get("url") if photos else None
+            if photo_url:
+                photo_url = photo_url.replace("http://", "https://", 1)
             attractions.append({
                 "id": str(i + 1),
                 "name": p["name"],
