@@ -384,9 +384,13 @@ export default function Home() {
     }
 
     const arc = () => {
+      const els = items()
+      if (window.innerWidth >= 768) {
+        for (const el of els) el.style.transform = ''
+        return
+      }
       const center = cards.scrollLeft + cards.clientWidth / 2
       const span = cards.clientWidth * 0.42
-      const els = items()
       for (let i = 0; i < els.length; i++) {
         const pos = posCached[i] ?? { left: els[i].offsetLeft, w: els[i].offsetWidth }
         const cc = pos.left + pos.w / 2
