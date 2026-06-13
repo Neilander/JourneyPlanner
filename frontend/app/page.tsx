@@ -544,7 +544,7 @@ export default function Home() {
       )}
 
       {/* Header — 小蜜鼓边顶栏 */}
-      <div className="px-3 py-2.5" style={{ background: 'var(--panel)', boxShadow: '0 2px 12px rgba(120,90,30,.18)', paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}>
+      <div className="px-3 py-2.5" style={{ background: 'linear-gradient(to bottom, #fff8ee, #FBF4DD)', boxShadow: '0 3px 14px rgba(100,72,20,.16), inset 0 -1px 0 rgba(180,140,60,.18)', paddingTop: 'calc(env(safe-area-inset-top) + 10px)' }}>
         <div className="xm-topbar">
           {/* 城市 */}
           <button className="pbtn b-city" onClick={() => setShowCityPicker(true)}>

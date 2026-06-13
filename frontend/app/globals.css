@@ -3,7 +3,7 @@
 :root {
   --base:    #F5E9C8;
   --surface: #FBF4DD;
-  --panel:   #EDE5C8;   /* 上下边栏底色，比地图浅米白略深一档 */
+  --panel:   #FBF4DD;   /* 上下边栏底色，同 surface */
   --primary: #6FA04A;
   --accent:  #E0883C;
   --blue:    #8FB8C4;
@@ -53,7 +53,7 @@ body {
 .xm-dock{position:absolute;left:0;right:0;bottom:0;height:330px;z-index:10}
 /* 底板：贴底，height 决定波浪上边线高度（小=边更靠下） */
 .xm-tray-bg{position:absolute;left:0;right:0;bottom:0;height:308px;z-index:0;
-  filter:drop-shadow(0 -2px 5px rgba(120,100,60,.12))}
+  filter:drop-shadow(0 -3px 10px rgba(100,72,20,.18))}
 .xm-tray-bg svg{width:100%;height:100%;display:block}
 .xm-dock-inner{position:absolute;inset:0;z-index:1}
 
