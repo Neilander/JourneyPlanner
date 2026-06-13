@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ZCOOL_KuaiLe } from "next/font/google";
 import "./globals.css";
 
@@ -12,7 +12,12 @@ const zcoolKuaiLe = ZCOOL_KuaiLe({
 export const metadata: Metadata = {
   title: "旅途向导",
   description: "酒店通勤助手",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
