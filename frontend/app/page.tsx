@@ -87,6 +87,8 @@ export default function Home() {
   const AMapRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hotelMarkersRef = useRef<any[]>([])
+  const attractionMarkersRef = useRef<any[]>([])
+  const toggleSelectRef = useRef<(id: string) => void>(() => {})
   const uidRef = useRef<string>('')
   const cardsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef({ down: false, sx: 0, sl: 0, moved: false })
@@ -197,25 +199,40 @@ export default function Home() {
         })
         mapRef.current = map
         setMapReady(n => n + 1)
-
-        attractions.forEach(a => {
-          const marker = new AMap.Marker({
-            position: [a.lng, a.lat],
-            title: a.name,
-            content: `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
-              <div style="width:26px;height:26px;background:#4A7FBF;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(74,127,191,0.45);display:flex;align-items:center;justify-content:center">
-                <div style="width:10px;height:10px;background:white;border-radius:50%;transform:rotate(45deg)"></div>
-              </div>
-              <div style="background:white;color:#2d4f7a;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-top:3px;box-shadow:0 1px 5px rgba(0,0,0,0.15);white-space:nowrap">${a.name}</div>
-            </div>`,
-            offset: new AMap.Pixel(-13, -34),
-          })
-          marker.setMap(map)
-        })
       })
     })()
     return () => { cancelled = true; mapRef.current?.destroy() }
   }, [mapCenter, attractions])
+
+  // 景点 marker（选中状态变化时重绘，颜色联动）
+  useEffect(() => {
+    const AMap = AMapRef.current
+    const map = mapRef.current
+    if (!AMap || !map) return
+    attractionMarkersRef.current.forEach(m => m.setMap(null))
+    attractionMarkersRef.current = []
+    attractions.forEach(a => {
+      const isSel = selected.has(a.id)
+      const pinColor = isSel ? '#E0883C' : '#4A7FBF'
+      const pinShadow = isSel ? 'rgba(224,136,60,0.5)' : 'rgba(74,127,191,0.45)'
+      const labelColor = isSel ? '#7a4010' : '#2d4f7a'
+      const labelBg = isSel ? '#fdf0e0' : 'white'
+      const marker = new AMap.Marker({
+        position: [a.lng, a.lat],
+        title: a.name,
+        content: `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
+          <div style="width:26px;height:26px;background:${pinColor};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px ${pinShadow};display:flex;align-items:center;justify-content:center">
+            <div style="width:10px;height:10px;background:white;border-radius:50%;transform:rotate(45deg)"></div>
+          </div>
+          <div style="background:${labelBg};color:${labelColor};padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700;margin-top:3px;box-shadow:0 1px 5px rgba(0,0,0,0.15);white-space:nowrap">${a.name}</div>
+        </div>`,
+        offset: new AMap.Pixel(-13, -34),
+      })
+      marker.on('click', () => toggleSelectRef.current(a.id))
+      marker.setMap(map)
+      attractionMarkersRef.current.push(marker)
+    })
+  }, [attractions, mapReady, selected])
 
   // Bot加载的酒店上图（等地图ready）
   useEffect(() => {
@@ -264,6 +281,8 @@ export default function Home() {
       return next
     })
   }
+
+  toggleSelectRef.current = toggleSelect
 
   const removeHotel = async (hotelId: string) => {
     // 先更新本地（markers useEffect 会自动重绘）
