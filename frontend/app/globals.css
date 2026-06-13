@@ -63,9 +63,9 @@ body {
   will-change:scroll-position;transform:translateZ(0)}
 
 @media (min-width: 768px) {
-  .xm-dock  { height: 220px }
-  .xm-tray-bg { height: 200px }
-  .xm-cards { gap: 18px; bottom: 28px; padding: 48px calc(50% - 100px) 14px }
+  .xm-dock  { height: 246px }
+  .xm-tray-bg { height: 226px }
+  .xm-cards { gap: 18px; bottom: 28px; padding: 72px calc(50% - 100px) 14px }
   .acard { flex: 0 0 200px; border-radius: 22px; padding: 10px 10px 13px }
   .acard .pic { height: 118px; border-radius: 15px; font-size: 52px }
   .acard .ttl { font-size: 15px; margin-top: 10px }
