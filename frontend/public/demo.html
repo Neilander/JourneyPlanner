@@ -14,11 +14,12 @@
     --serif:'Noto Serif SC',serif; --fr:'Fraunces',serif; --wk:'LXGW WenKai','LXGW WenKai TC',sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{min-height:100vh;background:var(--paper);font-family:var(--wk);color:var(--ink);
-    display:flex;flex-direction:column;align-items:center;padding:0;overflow:hidden;
-    background-image:radial-gradient(70% 38% at 50% 0,var(--paper-hi),transparent 70%)}
-  #wrap{display:flex;flex-direction:column;align-items:center;padding:24px 12px;
-    transform-origin:top center;}
+  body{min-height:100vh;background:#cfc3a5;font-family:var(--wk);color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;padding:0;overflow:hidden}
+  /* 小红书竖屏视频画框 9:16（录制区）*/
+  #wrap{width:540px;height:960px;overflow:hidden;transform-origin:top center;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:var(--paper);background-image:radial-gradient(70% 30% at 50% 0,var(--paper-hi),transparent 70%)}
   .brand{display:flex;align-items:center;gap:12px;margin-bottom:14px}
   .brand .logo{width:46px;height:46px;border-radius:50%;background:#f7ead0;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px -7px rgba(120,90,30,.5)}
   .brand .nm{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:1px}
@@ -26,16 +27,20 @@
 
   .phonewrap{position:relative;display:flex;justify-content:center;
     transition:transform 1.05s cubic-bezier(.2,.8,.2,1), opacity .8s ease}
-  .phonewrap.intro{transform:translateY(-118vh);opacity:0}
+  .phonewrap.intro{transform:translateY(-1300px);opacity:0}
   .brand{transition:opacity .9s ease}
   .brand.hide{opacity:0}
-  .phone{width:390px;height:760px;border-radius:50px;background:#1b1b1f;padding:7px;position:relative;z-index:10;
+  .phone{width:344px;height:720px;border-radius:46px;background:#1b1b1f;padding:7px;position:relative;z-index:10;
     box-shadow:0 44px 80px -30px rgba(70,52,24,.5),0 14px 30px -14px rgba(70,52,24,.4),inset 0 0 0 1px rgba(255,255,255,.1)}
   .notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:104px;height:22px;background:#1b1b1f;border-radius:0 0 14px 14px;z-index:60}
   .screen{width:100%;height:100%;border-radius:40px;overflow:hidden;position:relative;background:#fff}
 
-  .pops{position:absolute;top:-30px;bottom:-30px;left:-210px;right:-210px;z-index:5;pointer-events:none}
-  .pop{position:absolute;background:#fff;border:2px solid var(--ctrip);color:var(--ctrip);font-size:16px;font-weight:700;padding:9px 18px;border-radius:20px;box-shadow:0 10px 24px -8px rgba(47,143,255,.55);opacity:0;white-space:nowrap}
+  .pops{position:absolute;inset:0;z-index:15;pointer-events:none}
+  .popwrap{position:absolute}
+  .popwrap.l{left:0;transform:translateX(-50%)}
+  .popwrap.r{right:0;transform:translateX(50%)}
+  .pop{background:#fff;border:2px solid var(--ctrip);color:var(--ctrip);font-size:15px;font-weight:700;
+    padding:8px 15px;border-radius:18px;box-shadow:0 8px 20px -7px rgba(47,143,255,.5);opacity:0;white-space:nowrap}
   .pops.run .pop{animation:pop 2.8s ease-in-out infinite}
   @keyframes pop{0%{opacity:0;transform:scale(.6)}14%{opacity:1;transform:scale(1)}55%{opacity:1}82%,100%{opacity:0;transform:scale(.9)}}
 
@@ -95,8 +100,12 @@
   @keyframes tap{50%{transform:scale(.95);box-shadow:0 0 0 3px rgba(224,136,60,.4)}}
 
   /* 幕C 真实前端 */
-  .sc{background:#fff}
-  .appframe{width:100%;height:100%;border:0;display:block}
+  .sc{background:#FBF4DD;display:flex;flex-direction:column}
+  /* 顶部纯色状态条，给前端留空间、不被刘海挡 */
+  .appbar{height:36px;flex-shrink:0;background:#FBF4DD;display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px 0 22px;font-size:13px;font-weight:600;color:#4a3b26;font-family:var(--wk)}
+  /* iframe 按更大像素渲染再整体缩放 → app 看起来更小、显示更多（同比例）*/
+  .appframe{width:430px;height:876px;flex:none;border:0;display:block;transform:scale(.767);transform-origin:top left}
 
   .endcard{position:absolute;inset:0;background:rgba(240,236,225,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;opacity:0;transition:opacity .6s;z-index:50}
   .endcard.on{opacity:1}
@@ -104,7 +113,7 @@
   .endcard .et em{font-family:var(--fr);font-style:italic;color:var(--gold)}
   .endcard .es{margin-top:12px;font-size:15px;color:var(--ink2)}
 
-  .caption{margin-top:18px;text-align:center;min-height:56px;max-width:340px}
+  .caption{margin-top:28px;text-align:center;min-height:56px;max-width:340px}
   .caption .c{font-family:var(--serif);font-weight:700;font-size:20px;color:var(--ink);opacity:0;transition:opacity .5s}
   .caption .c.on{opacity:1}
   .replay{margin-top:6px;font-size:13px;color:var(--ink2);cursor:pointer;border:1px solid #e6dcc4;border-radius:18px;padding:6px 16px;background:#faf7f0}
@@ -147,7 +156,10 @@
         </div>
       </div>
 
-      <div class="scene sc" id="sc"><iframe id="appframe" class="appframe" title="app"></iframe></div>
+      <div class="scene sc" id="sc">
+        <div class="appbar"><span>9:41</span><span>📶 🔋</span></div>
+        <iframe id="appframe" class="appframe" title="app"></iframe>
+      </div>
 
       <div class="endcard" id="endcard">
         <div class="et">离景点最近的那家<br><em>它帮你挑出来</em></div>
@@ -159,8 +171,8 @@
   </div>
 
   <div class="caption" id="caption"><span class="c"></span></div>
-  <div class="replay" id="replay">↻ 重播</div>
 </div><!-- #wrap -->
+<div class="replay" id="replay">↻ 重播</div>
 
 <script>
   const IMG = n => `/attractions/${n}.jpg`;
@@ -173,10 +185,10 @@
       <div class="tags"><span class="tag">免费取消</span><span class="tag">含早</span></div></div>
       <div class="price">¥${320+i*46}<b>起</b></div>`; list.appendChild(d);});
   const pops=document.getElementById('pops');
-  const POS=[[20,70],[40,320],[10,560],[560,120],[585,400],[548,600]];
-  POS.forEach((p,i)=>{const s=document.createElement('div');s.className='pop';
-    s.style.left=p[0]+'px';s.style.top=p[1]+'px';s.style.animationDelay=(i*0.45)+'s';
-    s.textContent=HOTELS[i];pops.appendChild(s);});
+  const POS=[['l',70],['l',330],['l',560],['r',150],['r',400],['r',600]];
+  POS.forEach((p,i)=>{const w=document.createElement('div');w.className='popwrap '+p[0];w.style.top=p[1]+'px';
+    const s=document.createElement('div');s.className='pop';s.style.animationDelay=(i*0.45)+'s';s.textContent=HOTELS[i];
+    w.appendChild(s);pops.appendChild(w);});
 
   const sa=document.getElementById('sa'),sb=document.getElementById('sb'),sc=document.getElementById('sc');
   const cap=document.querySelector('#caption .c'),endcard=document.getElementById('endcard');
@@ -190,6 +202,9 @@
   function clickInApp(sel){try{const d=appframe.contentDocument;const el=d&&d.querySelector(sel);if(el){el.click();return true;}}catch(e){}return false;}
   function scrollCards(px){try{const c=appframe.contentDocument.querySelector('.xm-cards');if(c)c.scrollBy({left:px,behavior:'smooth'});}catch(e){}}
   function deselectOne(){try{const liked=appframe.contentDocument.querySelector('.acard.liked');if(liked)liked.click();}catch(e){}}
+  function selectCards(n){try{const cs=[...appframe.contentDocument.querySelectorAll('.acard:not(.liked)')];for(let i=0;i<n&&i<cs.length;i++)cs[i].click();}catch(e){}}
+  function openWarnings(){try{const b=[...appframe.contentDocument.querySelectorAll('.b-set')].find(x=>/酒店/.test(x.textContent));if(b)b.click();}catch(e){}}
+  function closeModal(){try{const b=[...appframe.contentDocument.querySelectorAll('button')].find(x=>x.textContent.trim()==='完成');if(b)b.click();}catch(e){}}
 
   function reset(){
     timers.forEach(clearTimeout);timers=[];
@@ -208,13 +223,16 @@
     // ===== Act 0 · 开场 =====
     at(200,()=>{ phonewrap.classList.remove('intro'); brand.classList.remove('hide'); say('选酒店，截图就够了'); }); // 手机缓入 + 标题文字浮现
     at(1700,()=>say('已帮你导入候选酒店、定位好地图'));
-    at(3100,()=>{ scrollCards(240); say('滑一滑想去的景点'); });
-    at(4500,()=>{ deselectOne(); say('不想去的，点一下取消'); });
-    at(5900,()=>{ clickInApp('.b-seg .half.r'); say('看通勤排名 + 避雷'); });
+    at(3000,()=>{ scrollCards(220); say('滑一滑，选上想去的景点'); });
+    at(4100,()=>{ selectCards(2); });                              // 多选两个景点，排行榜才有内容
+    at(5500,()=>{ clickInApp('.b-seg .half.r'); say('看酒店通勤排名'); });
+    at(7400,()=>{ openWarnings(); say('再看 AI 评论避雷 ⚠️'); });    // 点开候选酒店看雷点
+    at(9400,()=>closeModal());
 
     // ===== 渐变切回「原本开头」：携程 → 微信 → 前端 =====
-    const O=8200;
-    at(O-200,()=>clickInApp('.b-seg .half.l'));   // 切回地图，留给幕C
+    const O=10400;
+    at(O-300,()=>closeModal());
+    at(O-150,()=>clickInApp('.b-seg .half.l'));   // 切回地图，留给幕C
     at(O+0,   ()=>{onlyScene(sa);void sa.offsetWidth;sa.classList.add('run');pops.classList.add('run');say('回到现实：携程上酒店一大堆…');});
     at(O+2600,()=>say('XX酒店、XX酒店…挑花眼 😵'));
     at(O+5200,()=>{sa.classList.add('q');say('到底哪家去景点最方便？');});
@@ -230,15 +248,14 @@
   // 自动缩放：让全部内容适配视口（小红书录制框）
   const wrap = document.getElementById('wrap');
   function fitWrap(){
-    const naturalW = 414; // wrap 自然宽度（手机390 + 两侧padding24）
-    const naturalH = 1000; // 估算总高度
-    const sw = innerWidth / naturalW;
-    const sh = innerHeight / naturalH;
-    const s = Math.min(sw, sh, 1);
+    const naturalW = 540;  // 9:16 画框宽
+    const naturalH = 960;  // 9:16 画框高
+    const s = Math.min((innerWidth - 12) / naturalW, (innerHeight - 60) / naturalH);
     wrap.style.transform = `scale(${s})`;
     wrap.style.width = naturalW + 'px';
-    // 让 body 居中并补上实际占用高度
-    document.body.style.paddingTop = Math.max(0,(innerHeight - naturalH*s)/2) + 'px';
+    wrap.style.height = naturalH + 'px';
+    // 让画框整体水平/垂直留白
+    document.body.style.paddingTop = Math.max(8,(innerHeight - naturalH*s)/2) + 'px';
   }
   addEventListener('resize', fitWrap);
   fitWrap();
