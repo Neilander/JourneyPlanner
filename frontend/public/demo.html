@@ -15,8 +15,10 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{min-height:100vh;background:var(--paper);font-family:var(--wk);color:var(--ink);
-    display:flex;flex-direction:column;align-items:center;padding:24px 12px;
+    display:flex;flex-direction:column;align-items:center;padding:0;overflow:hidden;
     background-image:radial-gradient(70% 38% at 50% 0,var(--paper-hi),transparent 70%)}
+  #wrap{display:flex;flex-direction:column;align-items:center;padding:24px 12px;
+    transform-origin:top center;}
   .brand{display:flex;align-items:center;gap:12px;margin-bottom:14px}
   .brand .logo{width:46px;height:46px;border-radius:50%;background:#f7ead0;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px -7px rgba(120,90,30,.5)}
   .brand .nm{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:1px}
@@ -27,7 +29,7 @@
   .phonewrap.intro{transform:translateY(-118vh);opacity:0}
   .brand{transition:opacity .9s ease}
   .brand.hide{opacity:0}
-  .phone{width:344px;height:720px;border-radius:46px;background:#1b1b1f;padding:7px;position:relative;z-index:10;
+  .phone{width:390px;height:760px;border-radius:50px;background:#1b1b1f;padding:7px;position:relative;z-index:10;
     box-shadow:0 44px 80px -30px rgba(70,52,24,.5),0 14px 30px -14px rgba(70,52,24,.4),inset 0 0 0 1px rgba(255,255,255,.1)}
   .notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:104px;height:22px;background:#1b1b1f;border-radius:0 0 14px 14px;z-index:60}
   .screen{width:100%;height:100%;border-radius:40px;overflow:hidden;position:relative;background:#fff}
@@ -109,6 +111,7 @@
 </style>
 </head>
 <body>
+<div id="wrap">
   <div class="brand hide" id="brand">
     <span class="logo"><svg viewBox="0 0 100 124" width="30" height="30"><g stroke="#3a2a1a" stroke-width="5" stroke-linecap="round" fill="#3a2a1a"><line x1="43" y1="24" x2="33" y2="8"/><circle cx="32" cy="6" r="5.5"/><line x1="57" y1="24" x2="67" y2="8"/><circle cx="68" cy="6" r="5.5"/></g><defs><clipPath id="bb"><path d="M50,20 C72,20 88,36 88,57 C88,83 61,105 50,119 C39,105 12,83 12,57 C12,36 28,20 50,20Z"/></clipPath></defs><path d="M50,20 C72,20 88,36 88,57 C88,83 61,105 50,119 C39,105 12,83 12,57 C12,36 28,20 50,20Z" fill="#f6c72e"/><g clip-path="url(#bb)" fill="#3a2a1a"><rect x="0" y="70" width="100" height="9"/><rect x="0" y="87" width="100" height="9"/><rect x="0" y="104" width="100" height="9"/></g><circle cx="50" cy="51" r="14" fill="#f7ead0"/></svg></span>
     <span class="nm">旅居小蜜</span><span class="kk">Journey Planner</span>
@@ -157,6 +160,7 @@
 
   <div class="caption" id="caption"><span class="c"></span></div>
   <div class="replay" id="replay">↻ 重播</div>
+</div><!-- #wrap -->
 
 <script>
   const IMG = n => `/attractions/${n}.jpg`;
@@ -223,6 +227,22 @@
     at(O+17600,()=>{clickInApp('.b-seg .half.r');say('酒店按通勤排名 + 避雷，一目了然');});
     at(O+21200,()=>{endcard.classList.add('on');say('🐝 旅居小蜜 · 离景点最近的那家');});
   }
+  // 自动缩放：让全部内容适配视口（小红书录制框）
+  const wrap = document.getElementById('wrap');
+  function fitWrap(){
+    const naturalW = 414; // wrap 自然宽度（手机390 + 两侧padding24）
+    const naturalH = 1000; // 估算总高度
+    const sw = innerWidth / naturalW;
+    const sh = innerHeight / naturalH;
+    const s = Math.min(sw, sh, 1);
+    wrap.style.transform = `scale(${s})`;
+    wrap.style.width = naturalW + 'px';
+    // 让 body 居中并补上实际占用高度
+    document.body.style.paddingTop = Math.max(0,(innerHeight - naturalH*s)/2) + 'px';
+  }
+  addEventListener('resize', fitWrap);
+  fitWrap();
+
   document.getElementById('replay').onclick=run;
   run();
 </script>

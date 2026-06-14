@@ -26,6 +26,21 @@ body {
 
 /* ───────── 小蜜 · 鼓边顶栏按钮 ───────── */
 .xm-topbar{display:flex;align-items:center;gap:7px}
+@media (max-width: 400px) {
+  .xm-topbar{gap:3px}
+  .b-city{width:66px;height:50px}
+  .b-seg{width:88px;height:50px}
+  .b-set{width:40px;height:54px}
+  .b-imp{width:52px;height:54px}
+  .stack img{height:18px}
+  .stack .t{font-size:10px}
+  .acard{flex:0 0 96px;border-radius:15px;padding:6px 6px 9px}
+  .acard .pic{height:110px;border-radius:10px;font-size:36px}
+  .acard .ttl{font-size:12px;margin-top:6px}
+  .xm-dock{height:280px}
+  .xm-tray-bg{height:260px}
+  .xm-cards{bottom:44px;padding:40px calc(50% - 48px) 16px}
+}
 @media (min-width: 768px) {
   .xm-topbar{gap:14px}
 }

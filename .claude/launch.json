@@ -15,8 +15,8 @@
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "-p", "3000"],
+      "runtimeExecutable": "D:\\NEXTJS\\node.exe",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "--webpack", "-p", "3000"],
       "cwd": "frontend",
       "port": 3000
     }
