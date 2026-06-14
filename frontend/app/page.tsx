@@ -89,6 +89,7 @@ export default function Home() {
   const hotelMarkersRef = useRef<any[]>([])
   const attractionMarkersRef = useRef<any[]>([])
   const toggleSelectRef = useRef<(id: string) => void>(() => {})
+  const lastToggleRef = useRef<{ id: string; ts: number }>({ id: '', ts: 0 })
   const uidRef = useRef<string>('')
   const cardsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef({ down: false, sx: 0, sl: 0, moved: false })
@@ -279,6 +280,9 @@ export default function Home() {
   }, [hotels, mapReady])
 
   const toggleSelect = (id: string) => {
+    const now = Date.now()
+    if (lastToggleRef.current.id === id && now - lastToggleRef.current.ts < 400) return
+    lastToggleRef.current = { id, ts: now }
     setSelected(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
