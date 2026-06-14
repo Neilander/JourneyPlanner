@@ -22,7 +22,11 @@
   .brand .nm{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:1px}
   .brand .kk{font-family:var(--fr);font-style:italic;color:var(--ink2);font-size:14px;margin-left:2px}
 
-  .phonewrap{position:relative;display:flex;justify-content:center}
+  .phonewrap{position:relative;display:flex;justify-content:center;
+    transition:transform 1.05s cubic-bezier(.2,.8,.2,1), opacity .8s ease}
+  .phonewrap.intro{transform:translateY(-118vh);opacity:0}
+  .brand{transition:opacity .9s ease}
+  .brand.hide{opacity:0}
   .phone{width:344px;height:720px;border-radius:46px;background:#1b1b1f;padding:7px;position:relative;z-index:10;
     box-shadow:0 44px 80px -30px rgba(70,52,24,.5),0 14px 30px -14px rgba(70,52,24,.4),inset 0 0 0 1px rgba(255,255,255,.1)}
   .notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:104px;height:22px;background:#1b1b1f;border-radius:0 0 14px 14px;z-index:60}
@@ -105,12 +109,12 @@
 </style>
 </head>
 <body>
-  <div class="brand">
+  <div class="brand hide" id="brand">
     <span class="logo"><svg viewBox="0 0 100 124" width="30" height="30"><g stroke="#3a2a1a" stroke-width="5" stroke-linecap="round" fill="#3a2a1a"><line x1="43" y1="24" x2="33" y2="8"/><circle cx="32" cy="6" r="5.5"/><line x1="57" y1="24" x2="67" y2="8"/><circle cx="68" cy="6" r="5.5"/></g><defs><clipPath id="bb"><path d="M50,20 C72,20 88,36 88,57 C88,83 61,105 50,119 C39,105 12,83 12,57 C12,36 28,20 50,20Z"/></clipPath></defs><path d="M50,20 C72,20 88,36 88,57 C88,83 61,105 50,119 C39,105 12,83 12,57 C12,36 28,20 50,20Z" fill="#f6c72e"/><g clip-path="url(#bb)" fill="#3a2a1a"><rect x="0" y="70" width="100" height="9"/><rect x="0" y="87" width="100" height="9"/><rect x="0" y="104" width="100" height="9"/></g><circle cx="50" cy="51" r="14" fill="#f7ead0"/></svg></span>
     <span class="nm">旅居小蜜</span><span class="kk">Journey Planner</span>
   </div>
 
-  <div class="phonewrap">
+  <div class="phonewrap intro" id="phonewrap">
   <div class="pops" id="pops"></div>
   <div class="phone">
     <div class="notch"></div>
@@ -173,12 +177,15 @@
   const sa=document.getElementById('sa'),sb=document.getElementById('sb'),sc=document.getElementById('sc');
   const cap=document.querySelector('#caption .c'),endcard=document.getElementById('endcard');
   const appframe=document.getElementById('appframe');
+  const brand=document.getElementById('brand'),phonewrap=document.getElementById('phonewrap');
   let timers=[];
   const at=(t,fn)=>timers.push(setTimeout(fn,t));
   const say=t=>{cap.classList.remove('on');setTimeout(()=>{cap.textContent=t;cap.classList.add('on');},250);};
   const onlyScene=s=>[sa,sb,sc].forEach(x=>x.classList.toggle('on',x===s));
   const show=i=>{const m=document.querySelector(`.msg[data-i="${i}"]`);if(m)m.classList.add('show');};
   function clickInApp(sel){try{const d=appframe.contentDocument;const el=d&&d.querySelector(sel);if(el){el.click();return true;}}catch(e){}return false;}
+  function scrollCards(px){try{const c=appframe.contentDocument.querySelector('.xm-cards');if(c)c.scrollBy({left:px,behavior:'smooth'});}catch(e){}}
+  function deselectOne(){try{const liked=appframe.contentDocument.querySelector('.acard.liked');if(liked)liked.click();}catch(e){}}
 
   function reset(){
     timers.forEach(clearTimeout);timers=[];
@@ -186,22 +193,35 @@
     sa.classList.remove('run','q','tap');sb.classList.remove('tap');pops.classList.remove('run');
     document.querySelectorAll('.msg').forEach(m=>m.classList.remove('show'));
     endcard.classList.remove('on');cap.classList.remove('on');
+    phonewrap.classList.add('intro');brand.classList.add('hide');
     appframe.src='about:blank';
   }
   function run(){
     reset();
-    appframe.src='/?uid=demo';   // 提前加载真实前端，等到幕C 已就绪
-    at(100,()=>{onlyScene(sa);void sa.offsetWidth;sa.classList.add('run');pops.classList.add('run');say('携程上酒店一大堆…');});
-    at(2600,()=>say('XX酒店、XX酒店…挑花眼 😵'));
-    at(5200,()=>{sa.classList.add('q');say('到底哪家去景点最方便？');});
-    at(8000,()=>{onlyScene(sb);pops.classList.remove('run');say('把截图一股脑发给旅居小蜜');});
-    at(8500,()=>show(1));at(9200,()=>show(2));
-    at(10200,()=>{show(3);say('它说：收到～马上整理 ✅');});
-    at(12000,()=>{show(4);say('甩来一个链接，点开 👇');});
-    at(13600,()=>sb.classList.add('tap'));
-    at(14600,()=>{onlyScene(sc);say('打开就是你的候选酒店地图（已选大唐不夜城·钟楼）');});
-    at(17600,()=>{clickInApp('.b-seg .half.r');say('酒店按通勤排名 + 避雷，一目了然');});
-    at(21200,()=>{endcard.classList.add('on');say('🐝 旅居小蜜 · 离景点最近的那家');});
+    appframe.src='/?uid=demo';            // 提前加载真实前端
+    onlyScene(sc);                         // 手机里先放真实前端
+
+    // ===== Act 0 · 开场 =====
+    at(200,()=>{ phonewrap.classList.remove('intro'); brand.classList.remove('hide'); say('选酒店，截图就够了'); }); // 手机缓入 + 标题文字浮现
+    at(1700,()=>say('已帮你导入候选酒店、定位好地图'));
+    at(3100,()=>{ scrollCards(240); say('滑一滑想去的景点'); });
+    at(4500,()=>{ deselectOne(); say('不想去的，点一下取消'); });
+    at(5900,()=>{ clickInApp('.b-seg .half.r'); say('看通勤排名 + 避雷'); });
+
+    // ===== 渐变切回「原本开头」：携程 → 微信 → 前端 =====
+    const O=8200;
+    at(O-200,()=>clickInApp('.b-seg .half.l'));   // 切回地图，留给幕C
+    at(O+0,   ()=>{onlyScene(sa);void sa.offsetWidth;sa.classList.add('run');pops.classList.add('run');say('回到现实：携程上酒店一大堆…');});
+    at(O+2600,()=>say('XX酒店、XX酒店…挑花眼 😵'));
+    at(O+5200,()=>{sa.classList.add('q');say('到底哪家去景点最方便？');});
+    at(O+8000,()=>{onlyScene(sb);pops.classList.remove('run');say('把截图一股脑发给旅居小蜜');});
+    at(O+8500,()=>show(1));at(O+9200,()=>show(2));
+    at(O+10200,()=>{show(3);say('它说：收到～马上整理 ✅');});
+    at(O+12000,()=>{show(4);say('甩来一个链接，点开 👇');});
+    at(O+13600,()=>sb.classList.add('tap'));
+    at(O+14600,()=>{onlyScene(sc);say('打开就是你的候选酒店地图');});
+    at(O+17600,()=>{clickInApp('.b-seg .half.r');say('酒店按通勤排名 + 避雷，一目了然');});
+    at(O+21200,()=>{endcard.classList.add('on');say('🐝 旅居小蜜 · 离景点最近的那家');});
   }
   document.getElementById('replay').onclick=run;
   run();
