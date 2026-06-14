@@ -77,6 +77,11 @@
   .wx-input{height:54px;background:var(--wx-bar);border-top:1px solid #dcdcdc;display:flex;align-items:center;gap:12px;padding:0 14px}
   .wx-input .ic{font-size:22px;color:#444}
   .wx-input .box{flex:1;height:36px;background:#fff;border-radius:7px}
+  .shots{display:flex;gap:6px;flex-wrap:wrap;max-width:212px}
+  .shot{width:62px;height:88px;border-radius:8px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.14);overflow:hidden;display:flex;flex-direction:column}
+  .shot .si{height:50px;width:100%;object-fit:cover}
+  .shot .sl{height:6px;background:#e6e6e6;margin:7px 7px 0;border-radius:3px}
+  .shot .sl.s2{width:58%}
 
   /* ===== 底部标题 ===== */
   .title-wrap{margin-top:86px;text-align:center;padding:0 64px}
@@ -140,7 +145,16 @@
               </div>
               <div class="row out">
                 <div class="avatar me">我</div>
-                <div class="bubble">（占位）这是我想住的酒店链接</div>
+                <div class="bubble" style="padding:8px"><div class="shots">
+                  <div class="shot"><img class="si" src="../frontend/public/attractions/zhonglou.jpg"><div class="sl"></div><div class="sl s2"></div></div>
+                  <div class="shot"><img class="si" src="../frontend/public/attractions/datang.jpg"><div class="sl"></div><div class="sl s2"></div></div>
+                  <div class="shot"><img class="si" src="../frontend/public/attractions/chengqiang.jpg"><div class="sl"></div><div class="sl s2"></div></div>
+                  <div class="shot"><img class="si" src="../frontend/public/attractions/huimin.jpg"><div class="sl"></div><div class="sl s2"></div></div>
+                </div></div>
+              </div>
+              <div class="row out">
+                <div class="avatar me">我</div>
+                <div class="bubble">都是我在看的酒店，帮我看看哪个去景点最近～</div>
               </div>
               <div class="row in">
                 <img class="avatar" src="cover-assets/avatar-bot.png" alt="小蜜">
