@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>竖屏录屏区 · JourneyPlanner</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#15171c;color:#cfd6e0;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:22px 16px 50px}
+  .bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;margin-bottom:20px;font-size:13px;color:#9aa6b8}
+  .bar select,.bar button{font:13px inherit;background:#222834;color:#e7ecf3;border:1px solid #333c4c;border-radius:8px;padding:7px 12px;cursor:pointer}
+  .bar button.go{background:#e0883c;border-color:#e0883c;color:#fff;font-weight:600}
+  .bar .dim{color:#6f7c90}
+  .bar input[type=range]{accent-color:#e0883c}
+
+  /* 录制区：外面一圈角标，里面就是 app，录的时候框选 .region 的内框 */
+  .stage{position:relative;padding:14px}
+  .region{position:relative;background:#000;overflow:hidden;box-shadow:0 30px 80px -30px rgba(0,0,0,.8)}
+  .region iframe{border:none;display:block;transform-origin:top left}
+  /* 角标 */
+  .mark{position:absolute;width:18px;height:18px;border:2px solid #e0883c;pointer-events:none}
+  .m1{top:0;left:0;border-right:none;border-bottom:none}
+  .m2{top:0;right:0;border-left:none;border-bottom:none}
+  .m3{bottom:0;left:0;border-right:none;border-top:none}
+  .m4{bottom:0;right:0;border-left:none;border-top:none}
+  .tip{margin-top:18px;font-size:12px;color:#6f7c90;text-align:center;line-height:1.7;max-width:520px}
+  .tip b{color:#9aa6b8}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <label>比例
+      <select id="ratio">
+        <option value="390x844">手机 390×844（默认）</option>
+        <option value="393x852">iPhone 15 393×852</option>
+        <option value="412x915">安卓大屏 412×915</option>
+        <option value="405x720">9:16 竖屏视频 405×720</option>
+        <option value="360x780">小屏 360×780</option>
+      </select>
+    </label>
+    <label>放大 <input id="scale" type="range" min="1" max="2" step="0.1" value="1.3"> <span id="sv">1.3×</span></label>
+    <span class="dim" id="dim"></span>
+    <label>页面
+      <select id="path">
+        <option value="/?uid=demo">/?uid=demo</option>
+        <option value="/">/（无 uid）</option>
+      </select>
+    </label>
+    <button class="go" onclick="reloadFrame()">↻ 刷新</button>
+  </div>
+
+  <div class="stage">
+    <div class="region" id="region">
+      <iframe id="frame"></iframe>
+    </div>
+    <div class="mark m1"></div><div class="mark m2"></div><div class="mark m3"></div><div class="mark m4"></div>
+  </div>
+
+  <div class="tip">
+    橙色四角 = <b>录制范围</b>。按 <b>⌘⇧5</b> → 选「录制选定部分」→ 沿四角框出这个矩形即可（Retina 屏录出来的像素是显示尺寸的 2 倍，足够清晰）。<br>
+    需要更大画面就拖「放大」；要标准竖屏视频选 <b>9:16</b>。
+  </div>
+
+  <script>
+    const region=document.getElementById('region'), frame=document.getElementById('frame');
+    function apply(){
+      const [w,h]=document.getElementById('ratio').value.split('x').map(Number);
+      const s=+document.getElementById('scale').value;
+      document.getElementById('sv').textContent=s.toFixed(1)+'×';
+      // iframe 用逻辑分辨率(保证移动端布局)，再放大显示
+      frame.style.width=w+'px'; frame.style.height=h+'px'; frame.style.transform='scale('+s+')';
+      region.style.width=Math.round(w*s)+'px'; region.style.height=Math.round(h*s)+'px';
+      document.getElementById('dim').textContent='录制区 '+Math.round(w*s)+' × '+Math.round(h*s)+' px';
+    }
+    function reloadFrame(){ frame.src=document.getElementById('path').value; apply(); }
+    document.getElementById('ratio').addEventListener('change',apply);
+    document.getElementById('scale').addEventListener('input',apply);
+    document.getElementById('path').addEventListener('change',reloadFrame);
+    reloadFrame();
+  </script>
+</body>
+</html>

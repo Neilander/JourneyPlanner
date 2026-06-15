@@ -11,7 +11,7 @@ const zcoolKuaiLe = ZCOOL_KuaiLe({
 
 export const metadata: Metadata = {
   title: "旅途向导",
-  description: "酒店通勤助手",
+  description: "酒店出行助手",
 };
 
 export const viewport: Viewport = {
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className="h-full antialiased">
+    <html lang="zh-CN" className="h-full antialiased" suppressHydrationWarning>
       <body className={`${zcoolKuaiLe.variable} min-h-full flex flex-col`} style={{ fontFamily: "'LXGW WenKai Screen', 'LXGW WenKai', serif" }}>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/style.css" />
         {children}
