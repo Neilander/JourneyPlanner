@@ -116,6 +116,16 @@ export default function Home() {
   const [commuteDetail, setCommuteDetail] = useState<Record<string, Record<string, Leg>>>({})
   const [matrixLoading, setMatrixLoading] = useState(false)
 
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'demo:clearSelection') {
+        setSelected(new Set())
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
   // 从URL ?uid= 加载Bot收录的酒店、城市、已选景点（返回是否有待分析的酒店）
   const loadHotels = async (uid: string, firstLoad = false): Promise<boolean> => {
     try {
@@ -130,7 +140,8 @@ export default function Home() {
 
       if (firstLoad) {
         // 恢复已选景点（按名称匹配）
-        const savedNames: string[] = data.selected_attractions || []
+        const demoReset = new URLSearchParams(window.location.search).get('demoReset') === '1'
+        const savedNames: string[] = demoReset ? [] : (data.selected_attractions || [])
         const city = data.city || '南京'
         setCityName(city)
         const info = await fetch(`${API_BASE}/api/city/info?city=${encodeURIComponent(city)}`).then(r => r.json())
@@ -606,7 +617,7 @@ export default function Home() {
           </button>
 
           {/* 设置 */}
-          <button className="pbtn b-set" onClick={() => setShowSettings(true)} title="通勤偏好">
+          <button className="pbtn b-set" onClick={() => setShowSettings(true)} title="出行偏好">
             <svg className="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill="var(--cream)" d={D_SET} /></svg>
             <span className="c stack"><img src="/icons/icon-gear.png" alt="" /><span className="t">设置</span></span>
           </button>
@@ -654,7 +665,7 @@ export default function Home() {
             <div className="overflow-y-auto">
               {selectedAttractions.length > 0 && searchResults.length > 0 && (
                 <p className="text-xs px-4 py-2" style={{ color: 'var(--ink-mid)', borderBottom: '1px solid var(--cream)' }}>
-                  已选 {selectedAttractions.length} 个景点 · 右侧为估算平均通勤时长
+                  已选 {selectedAttractions.length} 个景点 · 右侧为估算平均出行时长
                 </p>
               )}
               {searchResults.map(p => {
@@ -698,7 +709,7 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/50 z-[9999] flex flex-col justify-end">
           <div className="rounded-t-3xl p-5" style={{ background: 'var(--surface)' }}>
             <div className="flex items-center justify-between mb-4">
-              <span className="font-bold text-base" style={{ color: 'var(--ink)' }}>通勤偏好</span>
+              <span className="font-bold text-base" style={{ color: 'var(--ink)' }}>出行偏好</span>
               <button onClick={() => setShowSettings(false)} className="text-sm" style={{ color: 'var(--ink-mid)' }}>完成</button>
             </div>
             <div className="space-y-3">
@@ -825,7 +836,7 @@ export default function Home() {
           {selected.size === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-sm" style={{ color: 'var(--ink-mid)' }}>
               <p>选择想去的景点</p>
-              <p className="mt-1">查看酒店通勤排行</p>
+              <p className="mt-1">查看酒店出行排行</p>
             </div>
           ) : hotels.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-sm" style={{ color: 'var(--ink-mid)' }}>
@@ -837,7 +848,7 @@ export default function Home() {
               {/* 标题行 */}
               <div className="flex items-center gap-2 mb-1">
                 <span style={{ fontSize: 18 }}>👑</span>
-                <h1 className="font-bold" style={{ fontSize: 16, color: 'var(--ink)' }}>酒店通勤时间排行榜</h1>
+                <h1 className="font-bold" style={{ fontSize: 16, color: 'var(--ink)' }}>酒店出行时间排行榜</h1>
               </div>
               <p className="text-xs mb-3 flex items-center gap-1 flex-wrap" style={{ color: 'var(--ink-mid)' }}>
                 {matrixLoading
@@ -866,7 +877,7 @@ export default function Home() {
                         color: i === 0 ? '#7a5a14' : i === 1 ? '#6b5a36' : i === 2 ? '#6e4526' : 'var(--ink-mid)',
                       }}>{i + 1}</span>
                       <span className="xm-rname">{item.hotel.name}</span>
-                      <div className="xm-ravg"><div className="lab">平均通勤</div><div className="big">{item.avg}<span>min</span></div></div>
+                      <div className="xm-ravg"><div className="lab">平均出行</div><div className="big">{item.avg}<span>min</span></div></div>
                       <button onClick={() => removeHotel(item.hotel.id)} className="text-xs text-red-400 ml-1">✕</button>
                     </div>
                     <div className="xm-rbar">

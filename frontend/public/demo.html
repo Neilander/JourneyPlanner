@@ -28,6 +28,9 @@
   .phonewrap{position:relative;display:flex;justify-content:center;
     transition:transform 1.05s cubic-bezier(.2,.8,.2,1), opacity .8s ease}
   .phonewrap.intro{transform:translateY(-1300px);opacity:0}
+  .phonewrap.slide-left{transform:translateX(-720px);opacity:0}
+  .phonewrap.from-right{transform:translateX(720px);opacity:0}
+  .phonewrap.no-anim{transition:none}
   .brand{transition:opacity .9s ease}
   .brand.hide{opacity:0}
   .phone{width:344px;height:720px;border-radius:46px;background:#1b1b1f;padding:7px;position:relative;z-index:10;
@@ -116,7 +119,15 @@
   .caption{margin-top:28px;text-align:center;min-height:56px;max-width:340px}
   .caption .c{font-family:var(--serif);font-weight:700;font-size:20px;color:var(--ink);opacity:0;transition:opacity .5s}
   .caption .c.on{opacity:1}
-  .replay{margin-top:6px;font-size:13px;color:var(--ink2);cursor:pointer;border:1px solid #e6dcc4;border-radius:18px;padding:6px 16px;background:#faf7f0}
+  .caption .c.hot{font-size:24px;color:var(--accent);text-shadow:0 8px 22px rgba(176,138,74,.22)}
+  .replay{
+    position:fixed;top:50%;z-index:80;transform:translateY(-50%);
+    font-size:13px;color:var(--ink2);cursor:pointer;border:1px solid #e6dcc4;border-radius:18px;
+    padding:8px 16px;background:#faf7f0;box-shadow:0 10px 24px -18px rgba(58,51,41,.55);
+    font-family:var(--wk);white-space:nowrap
+  }
+  .replay.left{left:max(18px,calc(50vw - 360px))}
+  .replay.right{right:max(18px,calc(50vw - 360px))}
 </style>
 </head>
 <body>
@@ -148,7 +159,7 @@
             <div class="shot"><img class="si" src="/attractions/chengqiang.jpg"><div class="sl"></div><div class="sl s2"></div></div>
           </div></div></div>
           <div class="msg out" data-i="2"><div class="av me">我</div><div class="bub">都是我在看的酒店，帮我看看哪个去景点近～</div></div>
-          <div class="msg in" data-i="3"><img class="av" src="/avatar-bot.png" alt="小蜜"><div class="bub">收到！正在整理通勤 + 避雷，稍等～ 🐝</div></div>
+          <div class="msg in" data-i="3"><img class="av" src="/avatar-bot.png" alt="小蜜"><div class="bub">收到！正在整理出行 + 避雷，稍等～ 🐝</div></div>
           <div class="msg in" data-i="4"><img class="av" src="/avatar-bot.png" alt="小蜜"><div class="bub" style="padding:8px"><div class="linkcard" id="linkcard">
             <div class="lt">你的酒店对比已生成 🗺️</div>
             <div class="lrow"><span class="lg">蜜</span><span class="ld">trip.neiland.xyz · 点开查看排名</span></div>
@@ -162,7 +173,7 @@
       </div>
 
       <div class="endcard" id="endcard">
-        <div class="et">离景点最近的那家<br><em>它帮你挑出来</em></div>
+        <div class="et">酒店、出行、避雷<br><em>一次整理好</em></div>
         <div class="es">🐝 旅居小蜜 · 转发即整理</div>
       </div>
 
@@ -172,7 +183,8 @@
 
   <div class="caption" id="caption"><span class="c"></span></div>
 </div><!-- #wrap -->
-<div class="replay" id="replay">↻ 重播</div>
+<button class="replay left" type="button">↻ 重播</button>
+<button class="replay right" type="button">重播 ↺</button>
 
 <script>
   const IMG = n => `/attractions/${n}.jpg`;
@@ -194,46 +206,95 @@
   const cap=document.querySelector('#caption .c'),endcard=document.getElementById('endcard');
   const appframe=document.getElementById('appframe');
   const brand=document.getElementById('brand'),phonewrap=document.getElementById('phonewrap');
-  let timers=[];
+  const APP_WARMUP=2000;
+  let timers=[], captionTimer=null, replaySeed=0;
   const at=(t,fn)=>timers.push(setTimeout(fn,t));
-  const say=t=>{cap.classList.remove('on');setTimeout(()=>{cap.textContent=t;cap.classList.add('on');},250);};
+  const say=(t,hot=false)=>{
+    cap.classList.remove('on');
+    if(captionTimer)clearTimeout(captionTimer);
+    captionTimer=setTimeout(()=>{
+      cap.textContent=t;
+      cap.classList.toggle('hot',hot);
+      cap.classList.add('on');
+      captionTimer=null;
+    },250);
+  };
+  const hideCaption=()=>{
+    if(captionTimer){clearTimeout(captionTimer);captionTimer=null;}
+    cap.classList.remove('on');
+    setTimeout(()=>{if(!cap.classList.contains('on')){cap.textContent='';cap.classList.remove('hot');}},520);
+  };
   const onlyScene=s=>[sa,sb,sc].forEach(x=>x.classList.toggle('on',x===s));
   const show=i=>{const m=document.querySelector(`.msg[data-i="${i}"]`);if(m)m.classList.add('show');};
   function clickInApp(sel){try{const d=appframe.contentDocument;const el=d&&d.querySelector(sel);if(el){el.click();return true;}}catch(e){}return false;}
   function scrollCards(px){try{const c=appframe.contentDocument.querySelector('.xm-cards');if(c)c.scrollBy({left:px,behavior:'smooth'});}catch(e){}}
-  function deselectOne(){try{const liked=appframe.contentDocument.querySelector('.acard.liked');if(liked)liked.click();}catch(e){}}
+  function clearInAppSelection(){try{appframe.contentWindow.postMessage({type:'demo:clearSelection'},'*');}catch(e){}}
+  function deselectLikedCards(){
+    clearInAppSelection();
+    try{
+      const liked=[...appframe.contentDocument.querySelectorAll('.acard.liked')];
+      liked.forEach(card=>card.click());
+      return liked.length;
+    }catch(e){}
+    return 0;
+  }
   function selectCards(n){try{const cs=[...appframe.contentDocument.querySelectorAll('.acard:not(.liked)')];for(let i=0;i<n&&i<cs.length;i++)cs[i].click();}catch(e){}}
   function openWarnings(){try{const b=[...appframe.contentDocument.querySelectorAll('.b-set')].find(x=>/酒店/.test(x.textContent));if(b)b.click();}catch(e){}}
   function closeModal(){try{const b=[...appframe.contentDocument.querySelectorAll('button')].find(x=>x.textContent.trim()==='完成');if(b)b.click();}catch(e){}}
 
   function reset(){
     timers.forEach(clearTimeout);timers=[];
+    if(captionTimer){clearTimeout(captionTimer);captionTimer=null;}
     [sa,sb,sc].forEach(x=>x.classList.remove('on'));
     sa.classList.remove('run','q','tap');sb.classList.remove('tap');pops.classList.remove('run');
     document.querySelectorAll('.msg').forEach(m=>m.classList.remove('show'));
-    endcard.classList.remove('on');cap.classList.remove('on');
+    endcard.classList.remove('on');cap.classList.remove('on','hot');cap.textContent='';
+    phonewrap.classList.remove('slide-left','from-right','no-anim');
     phonewrap.classList.add('intro');brand.classList.add('hide');
     appframe.src='about:blank';
   }
   function run(){
     reset();
-    appframe.src='/?uid=demo';            // 提前加载真实前端
+    replaySeed+=1;
+    appframe.src=`/?uid=demo&demoReset=1&replay=${replaySeed}`;  // 演示重播时跳过后端保存的已选景点
     onlyScene(sc);                         // 手机里先放真实前端
+    appframe.onload=()=>at(120,()=>clearInAppSelection());
 
     // ===== Act 0 · 开场 =====
-    at(200,()=>{ phonewrap.classList.remove('intro'); brand.classList.remove('hide'); say('选酒店，截图就够了'); }); // 手机缓入 + 标题文字浮现
-    at(1700,()=>say('已帮你导入候选酒店、定位好地图'));
-    at(3000,()=>{ scrollCards(220); say('滑一滑，选上想去的景点'); });
-    at(4100,()=>{ selectCards(2); });                              // 多选两个景点，排行榜才有内容
-    at(5500,()=>{ clickInApp('.b-seg .half.r'); say('看酒店通勤排名'); });
-    at(7400,()=>{ openWarnings(); say('再看 AI 评论避雷 ⚠️'); });    // 点开候选酒店看雷点
-    at(9400,()=>closeModal());
+    at(350,()=>deselectLikedCards());
+    at(700,()=>deselectLikedCards());
+    at(1050,()=>deselectLikedCards());
+    at(1400,()=>deselectLikedCards());
+    at(APP_WARMUP+0,()=>phonewrap.classList.remove('intro'));       // 手机先从上滑入
+    at(APP_WARMUP+900,()=>{ brand.classList.remove('hide'); say('选酒店，截图就够了'); }); // 标题文字随后浮现
+    at(APP_WARMUP+2800,()=>say('已帮你导入候选酒店、定位好地图'));
+    at(APP_WARMUP+4300,()=>{ scrollCards(220); say('滑一滑，选上想去的景点'); });
+    at(APP_WARMUP+5500,()=>{ selectCards(2); });                              // 多选两个景点，排行榜才有内容
+    at(APP_WARMUP+7000,()=>{ clickInApp('.b-seg .half.r'); say('看酒店出行排名'); });
+    at(APP_WARMUP+9300,()=>{ openWarnings(); say('再看 AI 评论避雷 ⚠️'); });    // 点开候选酒店看雷点
+    at(APP_WARMUP+11200,()=>say('出行、避雷，一下全看清！',true));
+    at(APP_WARMUP+13400,()=>closeModal());
 
-    // ===== 渐变切回「原本开头」：携程 → 微信 → 前端 =====
-    const O=10400;
-    at(O-300,()=>closeModal());
-    at(O-150,()=>clickInApp('.b-seg .half.l'));   // 切回地图，留给幕C
-    at(O+0,   ()=>{onlyScene(sa);void sa.offsetWidth;sa.classList.add('run');pops.classList.add('run');say('携程上酒店一大堆…');});
+    // ===== 换机位：前端手机左退场 → 旅游 App 手机右入场 =====
+    const S=APP_WARMUP+14500;
+    at(S-300,()=>closeModal());
+    at(S-150,()=>clickInApp('.b-seg .half.l'));   // 切回地图，留给退场镜头
+    at(S+0,()=>{hideCaption();phonewrap.classList.add('slide-left');});
+    at(S+1100,()=>{
+      phonewrap.classList.add('no-anim');
+      phonewrap.classList.remove('slide-left');
+      phonewrap.classList.add('from-right');
+      sa.classList.remove('run','q');
+      onlyScene(sa);
+      pops.classList.remove('run');
+      void phonewrap.offsetWidth;
+      phonewrap.classList.remove('no-anim');
+      void phonewrap.offsetWidth;
+      phonewrap.classList.remove('from-right');
+    });
+
+    const O=S+2250;
+    at(O+0,   ()=>{onlyScene(sa);void sa.offsetWidth;sa.classList.add('run');pops.classList.add('run');say('旅游 App 上酒店一大堆…');});
     at(O+2600,()=>say('XX酒店、XX酒店…挑花眼 😵'));
     at(O+5200,()=>{sa.classList.add('q');say('到底哪家去景点最方便？');});
     at(O+8000,()=>{onlyScene(sb);pops.classList.remove('run');say('把截图一股脑发给旅居小蜜');});
@@ -242,8 +303,8 @@
     at(O+12000,()=>{show(4);say('甩来一个链接，点开 👇');});
     at(O+13600,()=>sb.classList.add('tap'));
     at(O+14600,()=>{onlyScene(sc);say('打开就是你的候选酒店地图');});
-    at(O+17600,()=>{clickInApp('.b-seg .half.r');say('酒店按通勤排名 + 避雷，一目了然');});
-    at(O+21200,()=>{endcard.classList.add('on');say('🐝 旅居小蜜 · 离景点最近的那家');});
+    at(O+17600,()=>{clickInApp('.b-seg .half.r');say('酒店按出行排名 + 避雷，一目了然');});
+    at(O+21200,()=>{endcard.classList.add('on');say('🐝 旅居小蜜 · 酒店、出行、避雷');});
   }
   // 自动缩放：让全部内容适配视口（小红书录制框）
   const wrap = document.getElementById('wrap');
@@ -260,7 +321,7 @@
   addEventListener('resize', fitWrap);
   fitWrap();
 
-  document.getElementById('replay').onclick=run;
+  document.querySelectorAll('.replay').forEach(btn=>btn.addEventListener('click',run));
   run();
 </script>
 </body>
