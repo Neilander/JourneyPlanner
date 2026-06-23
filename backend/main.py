@@ -18,6 +18,7 @@ DEEPSEEK_KEY     = os.environ.get("DEEPSEEK_API_KEY", "")
 BAIDU_OCR_API_KEY    = os.environ.get("BAIDU_OCR_API_KEY", "")
 BAIDU_OCR_SECRET_KEY = os.environ.get("BAIDU_OCR_SECRET_KEY", "")
 QWEATHER_KEY     = os.environ.get("QWEATHER_KEY", "")
+SERPAPI_KEY      = os.environ.get("SERPAPI_KEY", "")
 
 H5_URL = "https://trip.neiland.xyz"
 DB_PATH = os.path.join(os.path.dirname(__file__), "journeyplanner.db")
@@ -573,6 +574,86 @@ def classify_intent(text: str, msgtype: str) -> tuple[str, str]:
         return ("done", "")
     return ("chitchat", "")
 
+# ── 景点实时情况查询 ──────────────────────────────────────────────────────────
+
+ATTRACTION_QUERY_PROMPT = """你是旅行助手，根据以下搜索结果回答用户关于景点的最新情况（人流、开放状态、特殊通知等）。
+
+要求：
+- 100字以内，简洁直接
+- 只说搜索结果里有的信息，没有就说「暂时没找到最新消息」
+- 如果有关闭/限流/特殊情况，用⚠️标出
+- 注明信息来源时间（如「据X天前消息」）
+- 不要编造信息"""
+
+ATTRACTION_INTENT_KEYWORDS = [
+    "人多吗", "人多不多", "拥挤", "排队", "等待", "限流",
+    "开放吗", "开门吗", "关闭", "停止开放", "暂停",
+    "最新情况", "现在怎么样", "今天怎么样", "值得去吗",
+    "能看到吗", "看不到", "特殊", "通知", "公告",
+]
+
+def is_attraction_query(text: str) -> bool:
+    return any(k in text for k in ATTRACTION_INTENT_KEYWORDS)
+
+def search_attraction_info(attraction: str, city: str = "") -> str | None:
+    """用 SerpAPI 搜索景点最新情况，返回摘要文本"""
+    if not SERPAPI_KEY:
+        return None
+    query = f"{city}{attraction} 最新情况 {__import__('datetime').date.today().strftime('%Y年')}"
+    try:
+        r = requests.get("https://serpapi.com/search", params={
+            "api_key": SERPAPI_KEY,
+            "engine": "google",
+            "q": query,
+            "hl": "zh-cn",
+            "gl": "cn",
+            "num": 5,
+            "tbs": "qdr:m",  # 最近一个月
+        }, timeout=10).json()
+
+        snippets = []
+        # 摘要框
+        if r.get("answer_box", {}).get("snippet"):
+            snippets.append(r["answer_box"]["snippet"])
+        # 普通搜索结果
+        for item in r.get("organic_results", [])[:5]:
+            snippet = item.get("snippet", "")
+            date = item.get("date", "")
+            if snippet:
+                snippets.append(f"[{date}] {snippet}" if date else snippet)
+
+        if not snippets:
+            return None
+        return "\n".join(snippets[:5])
+    except Exception as e:
+        print(f"[serpapi] error: {e}")
+    return None
+
+def query_attraction_status(text: str, city: str = "") -> str:
+    """主入口：搜索 + DeepSeek 提炼，返回回复文字"""
+    if not DEEPSEEK_KEY:
+        return "暂时无法查询景点信息，请直接搜索了解最新情况～"
+
+    raw = search_attraction_info(text, city)
+    if not raw:
+        return f"没找到关于「{text}」的最新消息，建议直接搜索或查看景区官方公众号～"
+
+    try:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+            json={"model": "deepseek-chat", "max_tokens": 150,
+                  "messages": [
+                      {"role": "system", "content": ATTRACTION_QUERY_PROMPT},
+                      {"role": "user", "content": f"用户问：{text}\n\n搜索结果：\n{raw}"},
+                  ]},
+            timeout=15
+        ).json()
+        return r["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[attraction_query] deepseek error: {e}")
+        return f"查到了一些信息但整理失败，建议直接搜索「{text} 最新」了解～"
+
 # ── DeepSeek 闲聊 ─────────────────────────────────────────────────────────────
 
 PERSONA_PROMPT = """你是「旅途向导」，一个旅行规划小助手。风格：像一张手写便签——简短、温暖、有点手绘感，偶尔用一个贴切的 emoji，但不堆砌。
@@ -809,6 +890,17 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
             conn.commit()
         send_text(open_kfid, user_id,
             "✅ 已清空候选酒店列表\n\n重新发酒店链接或分享文本，开始新一轮规划～")
+        return
+
+    # 分支C-1：景点实时情况查询
+    if intent == "chitchat" and msgtype == "text" and is_attraction_query(text):
+        deny = check_rate_limit(user_id, "deepseek")
+        if deny:
+            send_text(open_kfid, user_id, deny)
+            return
+        log_usage(user_id, "deepseek")
+        reply = query_attraction_status(text, user.get("city", ""))
+        send_text(open_kfid, user_id, reply)
         return
 
     # 分支C：普通闲聊
