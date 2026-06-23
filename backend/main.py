@@ -870,17 +870,19 @@ def qweather_location_id(city: str) -> str:
             return loc_id
     except Exception as e:
         print(f"[qweather_geo] {city} error: {e}")
-    return ""
+    # GeoAPI 不可用时直接用城市名（免费版支持）
+    return city
 
 def qweather_now(city: str) -> dict | None:
     """返回实时天气字典（text/temp/windDir/windScale/humidity/icon）"""
-    loc_id = qweather_location_id(city)
-    if not loc_id:
+    if not QWEATHER_KEY:
         return None
+    loc = qweather_location_id(city)
     try:
         r = requests.get(QWEATHER_NOW_URL, params={
-            "location": loc_id, "lang": "zh", "unit": "m", "key": QWEATHER_KEY,
+            "location": loc, "lang": "zh", "unit": "m", "key": QWEATHER_KEY,
         }, timeout=6).json()
+        print(f"[qweather_now] code={r.get('code')} loc={loc}")
         if r.get("code") == "200":
             return r["now"]
     except Exception as e:
@@ -889,12 +891,12 @@ def qweather_now(city: str) -> dict | None:
 
 def qweather_warnings(city: str) -> list[dict]:
     """返回当前生效的气象预警列表"""
-    loc_id = qweather_location_id(city)
-    if not loc_id:
+    if not QWEATHER_KEY:
         return []
+    loc = qweather_location_id(city)
     try:
         r = requests.get(QWEATHER_WARNING_URL, params={
-            "location": loc_id, "lang": "zh", "key": QWEATHER_KEY,
+            "location": loc, "lang": "zh", "key": QWEATHER_KEY,
         }, timeout=6).json()
         if r.get("code") == "200":
             return r.get("warning", [])
