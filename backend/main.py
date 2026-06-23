@@ -603,12 +603,9 @@ def search_attraction_info(attraction: str, city: str = "") -> str | None:
     try:
         r = requests.get("https://serpapi.com/search", params={
             "api_key": SERPAPI_KEY,
-            "engine": "google",
+            "engine": "baidu",
             "q": query,
-            "hl": "zh-cn",
-            "gl": "cn",
             "num": 5,
-            "tbs": "qdr:m",  # 最近一个月
         }, timeout=10).json()
 
         snippets = []
