@@ -1,10 +1,12 @@
 import os, json, re, sqlite3, threading, base64
 import xml.etree.ElementTree as ET
 import requests
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from wechatpy.enterprise.crypto import WeChatCrypto
+from apscheduler.schedulers.background import BackgroundScheduler
 
 load_dotenv()
 CORP_ID      = os.environ["WECOM_CORP_ID"]
@@ -15,6 +17,7 @@ AMAP_WEB_KEY = os.environ["AMAP_WEB_KEY"]
 DEEPSEEK_KEY     = os.environ.get("DEEPSEEK_API_KEY", "")
 BAIDU_OCR_API_KEY    = os.environ.get("BAIDU_OCR_API_KEY", "")
 BAIDU_OCR_SECRET_KEY = os.environ.get("BAIDU_OCR_SECRET_KEY", "")
+QWEATHER_KEY     = os.environ.get("QWEATHER_KEY", "")
 
 H5_URL = "https://trip.neiland.xyz"
 DB_PATH = os.path.join(os.path.dirname(__file__), "journeyplanner.db")
@@ -105,6 +108,12 @@ def migrate_db():
         if "walk" not in rc_cols:
             conn.execute("ALTER TABLE route_cache ADD COLUMN walk REAL DEFAULT 0")
             print("DB migration: added walk column to route_cache")
+        if "open_kfid" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN open_kfid TEXT DEFAULT ''")
+            print("DB migration: added open_kfid column to users")
+        if "push_enabled" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN push_enabled INTEGER DEFAULT 1")
+            print("DB migration: added push_enabled column to users")
         conn.commit()
 
 migrate_db()
@@ -623,9 +632,29 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         log_usage(user_id, "ocr")
 
     user = get_or_create_user(user_id)
+    # 记录本次会话的 open_kfid，供主动推送使用
+    if open_kfid and user.get("open_kfid") != open_kfid:
+        with get_db() as conn:
+            conn.execute("UPDATE users SET open_kfid=? WHERE wecom_id=?", (open_kfid, user_id))
+            conn.commit()
+        user["open_kfid"] = open_kfid
     bot_state = user["bot_state"]
     hotel_count = get_hotel_count(user["id"])
     intent, delete_target = classify_intent(text, msgtype)
+
+    # 天气推送开关
+    if msgtype == "text" and text.strip() in ("开启天气提醒", "打开天气提醒", "天气提醒"):
+        with get_db() as conn:
+            conn.execute("UPDATE users SET push_enabled=1 WHERE wecom_id=?", (user_id,))
+            conn.commit()
+        send_text(open_kfid, user_id, "✅ 已开启天气提醒！每天早上 8 点会给你推送目的地天气和预警 🌤️\n\n发「关闭天气提醒」可随时关闭。")
+        return
+    if msgtype == "text" and text.strip() in ("关闭天气提醒", "取消天气提醒", "停止天气提醒"):
+        with get_db() as conn:
+            conn.execute("UPDATE users SET push_enabled=0 WHERE wecom_id=?", (user_id,))
+            conn.commit()
+        send_text(open_kfid, user_id, "已关闭天气提醒。发「开启天气提醒」可重新开启。")
+        return
 
     # 非闲聊意图时重置连续闲聊计数
     if intent != "chitchat":
@@ -806,9 +835,153 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
     reply = deepseek_chat(text)
     send_text(open_kfid, user_id, reply)
 
+# ── 和风天气 ─────────────────────────────────────────────────────────────────
+
+QWEATHER_GEO_URL     = "https://geoapi.qweather.com/v2/city/lookup"
+QWEATHER_NOW_URL     = "https://devapi.qweather.com/v7/weather/now"
+QWEATHER_WARNING_URL = "https://devapi.qweather.com/v7/warning/now"
+
+# 天气状态码 → emoji（和风天气 icon code 前两位）
+_WEATHER_EMOJI = {
+    "10": "☀️", "11": "🌤️", "12": "⛅", "13": "🌥️",
+    "14": "☁️", "15": "🌬️", "21": "🌧️", "30": "🌩️",
+    "40": "🌨️", "50": "🌫️", "99": "🌡️",
+}
+
+def _weather_emoji(icon: str) -> str:
+    return _WEATHER_EMOJI.get(icon[:2] if icon else "", "🌡️")
+
+def qweather_location_id(city: str) -> str:
+    """城市名 → 和风天气 Location ID，结果缓存在 kv 表"""
+    if not QWEATHER_KEY:
+        return ""
+    cache_key = f"qw_loc:{city}"
+    cached = kv_get(cache_key)
+    if cached:
+        return cached
+    try:
+        r = requests.get(QWEATHER_GEO_URL, params={
+            "location": city, "lang": "zh", "key": QWEATHER_KEY,
+        }, timeout=6).json()
+        locs = r.get("location", [])
+        if locs:
+            loc_id = locs[0]["id"]
+            kv_set(cache_key, loc_id)
+            return loc_id
+    except Exception as e:
+        print(f"[qweather_geo] {city} error: {e}")
+    return ""
+
+def qweather_now(city: str) -> dict | None:
+    """返回实时天气字典（text/temp/windDir/windScale/humidity/icon）"""
+    loc_id = qweather_location_id(city)
+    if not loc_id:
+        return None
+    try:
+        r = requests.get(QWEATHER_NOW_URL, params={
+            "location": loc_id, "lang": "zh", "unit": "m", "key": QWEATHER_KEY,
+        }, timeout=6).json()
+        if r.get("code") == "200":
+            return r["now"]
+    except Exception as e:
+        print(f"[qweather_now] {city} error: {e}")
+    return None
+
+def qweather_warnings(city: str) -> list[dict]:
+    """返回当前生效的气象预警列表"""
+    loc_id = qweather_location_id(city)
+    if not loc_id:
+        return []
+    try:
+        r = requests.get(QWEATHER_WARNING_URL, params={
+            "location": loc_id, "lang": "zh", "key": QWEATHER_KEY,
+        }, timeout=6).json()
+        if r.get("code") == "200":
+            return r.get("warning", [])
+    except Exception as e:
+        print(f"[qweather_warning] {city} error: {e}")
+    return []
+
+def format_weather_push(city: str) -> str | None:
+    """格式化今日天气推送文字，无 key 或请求失败返回 None"""
+    now = qweather_now(city)
+    if not now:
+        return None
+    emoji = _weather_emoji(now.get("icon", ""))
+    text = now.get("text", "")
+    temp = now.get("temp", "")
+    wind_dir = now.get("windDir", "")
+    wind_sc  = now.get("windScale", "")
+    humidity = now.get("humidity", "")
+
+    lines = [
+        f"🗺️ {city} · 今日天气",
+        f"{emoji} {text}　{temp}°C",
+        f"💨 {wind_dir} {wind_sc}级　💧 湿度 {humidity}%",
+    ]
+
+    # 预警
+    warnings = qweather_warnings(city)
+    if warnings:
+        lines.append("")
+        lines.append("⚠️ 气象预警：")
+        for w in warnings[:3]:
+            sev  = w.get("severityColor", "")
+            title = w.get("title", w.get("typeName", "预警"))
+            lines.append(f"  🔴 {title}" if sev in ("Red", "Orange") else f"  🟡 {title}")
+        lines.append("出行注意安全～")
+    else:
+        lines.append("\n今天天气不错，出发顺利！☀️")
+
+    return "\n".join(lines)
+
+# ── 主动推送 ──────────────────────────────────────────────────────────────────
+
+def push_weather_to_user(wecom_id: str, open_kfid: str, city: str):
+    """给单个用户推送天气"""
+    if not open_kfid or not city:
+        return
+    msg = format_weather_push(city)
+    if not msg:
+        print(f"[push] skip {wecom_id}: no weather data")
+        return
+    try:
+        send_text(open_kfid, wecom_id, msg)
+        print(f"[push] sent weather to {wecom_id} city={city}")
+    except Exception as e:
+        print(f"[push] error for {wecom_id}: {e}")
+
+def run_daily_weather_push():
+    """每天 8:00 推送天气给所有开启提醒的用户"""
+    print("[push] running daily weather push...")
+    with get_db() as conn:
+        users = conn.execute(
+            "SELECT wecom_id, open_kfid, city FROM users WHERE push_enabled=1 AND open_kfid!='' AND city!=''"
+        ).fetchall()
+    print(f"[push] {len(users)} users to push")
+    for u in users:
+        threading.Thread(
+            target=push_weather_to_user,
+            args=(u["wecom_id"], u["open_kfid"], u["city"]),
+            daemon=True
+        ).start()
+
+# ── 调度器 ────────────────────────────────────────────────────────────────────
+
+_scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
+_scheduler.add_job(run_daily_weather_push, "cron", hour=8, minute=0, id="daily_weather")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _scheduler.start()
+    print("[scheduler] started, next weather push at 08:00 Asia/Shanghai")
+    yield
+    _scheduler.shutdown(wait=False)
+    print("[scheduler] stopped")
+
 # ── WeChat KF 基础设施 ────────────────────────────────────────────────────────
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "https://trip.neiland.xyz"],
@@ -1644,6 +1817,38 @@ async def delete_user_hotel(hotel_id: int, wecom_id: str):
         conn.execute("DELETE FROM hotels WHERE id=? AND user_id=?", (hotel_id, user["id"]))
         conn.commit()
     return {"ok": True}
+
+@app.post("/api/admin/push_weather")
+async def admin_push_weather(body: dict):
+    """手动触发天气推送（测试用），支持指定单个 wecom_id 或推送全部"""
+    wecom_id = body.get("wecom_id", "")
+    if wecom_id:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT wecom_id, open_kfid, city FROM users WHERE wecom_id=?", (wecom_id,)
+            ).fetchone()
+        if not row:
+            return {"ok": False, "msg": "user not found"}
+        push_weather_to_user(row["wecom_id"], row["open_kfid"], row["city"])
+        return {"ok": True, "pushed": 1}
+    else:
+        threading.Thread(target=run_daily_weather_push, daemon=True).start()
+        return {"ok": True, "msg": "push triggered in background"}
+
+@app.get("/api/weather/now")
+async def weather_now_api(city: str):
+    """实时天气查询（前端可调用）"""
+    now = qweather_now(city)
+    warnings = qweather_warnings(city)
+    if not now:
+        return {"ok": False}
+    return {
+        "ok": True,
+        "city": city,
+        "now": now,
+        "warnings": warnings,
+        "formatted": format_weather_push(city),
+    }
 
 @app.get("/api/city/info")
 async def city_info(city: str):
