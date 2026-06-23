@@ -837,79 +837,74 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
 
 # ── 和风天气 ─────────────────────────────────────────────────────────────────
 
-QWEATHER_GEO_URL     = "https://geoapi.qweather.com/v2/city/lookup"
-QWEATHER_NOW_URL     = "https://devapi.qweather.com/v7/weather/now"
-QWEATHER_WARNING_URL = "https://devapi.qweather.com/v7/warning/now"
+# 高德天气接口（免费，复用已有 AMAP_WEB_KEY）
+AMAP_WEATHER_URL = "https://restapi.amap.com/v3/weather/weatherInfo"
 
-# 天气状态码 → emoji（和风天气 icon code 前两位）
-_WEATHER_EMOJI = {
-    "10": "☀️", "11": "🌤️", "12": "⛅", "13": "🌥️",
-    "14": "☁️", "15": "🌬️", "21": "🌧️", "30": "🌩️",
-    "40": "🌨️", "50": "🌫️", "99": "🌡️",
+# 高德天气描述 → emoji
+_AMAP_WEATHER_EMOJI = {
+    "晴": "☀️", "少云": "🌤️", "晴间多云": "⛅", "多云": "🌥️",
+    "阴": "☁️", "有风": "🌬️", "平静": "😌", "微风": "🍃",
+    "和风": "🍃", "清风": "🍃", "强风": "💨", "疾风": "💨",
+    "大风": "🌬️", "烈风": "🌬️", "风暴": "🌀", "狂爆风": "🌀",
+    "飓风": "🌀", "热带风暴": "🌀", "龙卷风": "🌪️",
+    "阵雨": "🌦️", "雷阵雨": "⛈️", "雷阵雨并伴有冰雹": "⛈️",
+    "小雨": "🌧️", "中雨": "🌧️", "大雨": "🌧️", "暴雨": "🌧️",
+    "大暴雨": "🌧️", "特大暴雨": "🌧️", "强阵雨": "🌧️",
+    "强雷阵雨": "⛈️", "极端降雨": "🌧️", "毛毛雨": "🌦️",
+    "雨": "🌧️", "小雨-中雨": "🌧️", "中雨-大雨": "🌧️",
+    "大雨-暴雨": "🌧️", "暴雨-大暴雨": "🌧️", "大暴雨-特大暴雨": "🌧️",
+    "雨雪天气": "🌨️", "雨夹雪": "🌨️", "阵雨夹雪": "🌨️",
+    "冻雨": "🌨️", "雪": "❄️", "阵雪": "🌨️", "小雪": "🌨️",
+    "中雪": "❄️", "大雪": "❄️", "暴雪": "❄️", "小雪-中雪": "❄️",
+    "中雪-大雪": "❄️", "大雪-暴雪": "❄️", "浮尘": "🌫️",
+    "扬沙": "🌫️", "沙尘暴": "🌫️", "强沙尘暴": "🌫️",
+    "霾": "😷", "中度霾": "😷", "重度霾": "😷", "严重霾": "😷",
+    "雾": "🌫️", "浓雾": "🌫️", "强浓雾": "🌫️", "轻雾": "🌫️",
+    "大雾": "🌫️", "特强浓雾": "🌫️", "热": "🌡️", "冷": "🥶",
+    "未知": "🌡️",
 }
 
-def _weather_emoji(icon: str) -> str:
-    return _WEATHER_EMOJI.get(icon[:2] if icon else "", "🌡️")
+def _amap_weather_emoji(desc: str) -> str:
+    return _AMAP_WEATHER_EMOJI.get(desc, "🌡️")
 
-def qweather_location_id(city: str) -> str:
-    """城市名 → 和风天气 Location ID，结果缓存在 kv 表"""
-    if not QWEATHER_KEY:
-        return ""
-    cache_key = f"qw_loc:{city}"
-    cached = kv_get(cache_key)
-    if cached:
-        return cached
+def amap_weather_now(city: str) -> dict | None:
+    """高德实时天气，返回标准化字典"""
     try:
-        r = requests.get(QWEATHER_GEO_URL, params={
-            "location": city, "lang": "zh", "key": QWEATHER_KEY,
+        r = requests.get(AMAP_WEATHER_URL, params={
+            "key": AMAP_WEB_KEY, "city": city,
+            "extensions": "base", "output": "JSON",
         }, timeout=6).json()
-        locs = r.get("location", [])
-        if locs:
-            loc_id = locs[0]["id"]
-            kv_set(cache_key, loc_id)
-            return loc_id
+        lives = r.get("lives", [])
+        if lives:
+            w = lives[0]
+            return {
+                "text":      w.get("weather", ""),
+                "temp":      w.get("temperature", ""),
+                "windDir":   w.get("winddirection", ""),
+                "windScale": w.get("windpower", ""),
+                "humidity":  w.get("humidity", ""),
+            }
     except Exception as e:
-        print(f"[qweather_geo] {city} error: {e}")
-    # GeoAPI 不可用时直接用城市名（免费版支持）
-    return city
-
-def qweather_now(city: str) -> dict | None:
-    """返回实时天气字典（text/temp/windDir/windScale/humidity/icon）"""
-    if not QWEATHER_KEY:
-        return None
-    loc = qweather_location_id(city)
-    try:
-        r = requests.get(QWEATHER_NOW_URL, params={
-            "location": loc, "lang": "zh", "unit": "m", "key": QWEATHER_KEY,
-        }, timeout=6).json()
-        print(f"[qweather_now] code={r.get('code')} loc={loc}")
-        if r.get("code") == "200":
-            return r["now"]
-    except Exception as e:
-        print(f"[qweather_now] {city} error: {e}")
+        print(f"[amap_weather] {city} error: {e}")
     return None
 
-def qweather_warnings(city: str) -> list[dict]:
-    """返回当前生效的气象预警列表"""
-    if not QWEATHER_KEY:
-        return []
-    loc = qweather_location_id(city)
-    try:
-        r = requests.get(QWEATHER_WARNING_URL, params={
-            "location": loc, "lang": "zh", "key": QWEATHER_KEY,
-        }, timeout=6).json()
-        if r.get("code") == "200":
-            return r.get("warning", [])
-    except Exception as e:
-        print(f"[qweather_warning] {city} error: {e}")
+def amap_weather_warnings(city: str) -> list[dict]:
+    """高德暂无预警接口，返回空列表占位"""
     return []
+
+# 兼容旧函数名
+def qweather_now(city: str) -> dict | None:
+    return amap_weather_now(city)
+
+def qweather_warnings(city: str) -> list[dict]:
+    return amap_weather_warnings(city)
 
 def format_weather_push(city: str) -> str | None:
     """格式化今日天气推送文字，无 key 或请求失败返回 None"""
     now = qweather_now(city)
     if not now:
         return None
-    emoji = _weather_emoji(now.get("icon", ""))
+    emoji = _amap_weather_emoji(now.get("text", ""))
     text = now.get("text", "")
     temp = now.get("temp", "")
     wind_dir = now.get("windDir", "")
