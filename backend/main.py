@@ -662,28 +662,35 @@ PERSONA_PROMPT = """你是「旅途向导」，一个旅行规划小助手。风
 - 通勤排名：网页端选景点后，按公共交通/驾车/步行排名酒店
 - 避雷分析：自动分析大众点评评论，提炼⚠️警告点和评分
 - 多城市：发「换城市 成都」可切换
+- 旅行咨询：回答城市介绍、景点推荐、行程建议、交通攻略、美食推荐、最佳旅行时间等
+- 酒店推荐：根据用户需求推荐适合的酒店类型或区域（不能代预订）
+- 当前城市/目的地查询：告知用户当前设置的目的地城市
 
 【你不能做的事，必须如实说明，不能假装能做】
 - 不能查订单、不能代预订、不能看实时价格
 - 不能退改签，让用户联系平台客服
-- 不能主动推荐酒店，只整理用户发来的候选
 - 分析数据非实时，仅供参考
 
 【回复规则】
-- 80字以内，像写便签一样干净
-- 只回答旅行、酒店、景点、交通相关问题；与旅行无关的话题一句话拒绝：「我只会旅行相关的事～」
+- 100字以内，像写便签一样干净
+- 旅行、酒店、景点、交通、美食、城市相关问题都可以回答
+- 与旅行完全无关的话题（如编程、政治、娱乐八卦）一句话拒绝：「我只会旅行相关的事～」
 - 只说确定的事，不编造数据
-- 用户问「怎么用」「有什么功能」，用上面的内容简洁回答"""
+- 用户问「怎么用」「有什么功能」，用上面的内容简洁回答
+- 用户问「现在的城市」「目的地是哪」时，告知当前设置的城市"""
 
-def deepseek_chat(user_msg: str) -> str:
+def deepseek_chat(user_msg: str, city: str = "") -> str:
     if not DEEPSEEK_KEY:
         return "有什么旅行相关的问题都可以问我～发酒店链接或截图，我帮你整理候选名单！"
+    system = PERSONA_PROMPT
+    if city:
+        system += f"\n\n【当前用户目的地城市】{city}"
     try:
         r = requests.post(
             "https://api.deepseek.com/chat/completions",
             headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
-            json={"model": "deepseek-chat", "max_tokens": 120,
-                  "messages": [{"role": "system", "content": PERSONA_PROMPT},
+            json={"model": "deepseek-chat", "max_tokens": 150,
+                  "messages": [{"role": "system", "content": system},
                                 {"role": "user",   "content": user_msg}]},
             timeout=15
         ).json()
@@ -907,22 +914,8 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         send_text(open_kfid, user_id, deny)
         return
 
-    # 连续闲聊计数
-    offtopic_key = f"offtopic:{user_id}"
-    offtopic_count = int(kv_get(offtopic_key) or "0") + 1
-    kv_set(offtopic_key, str(offtopic_count))
-
-    if offtopic_count >= 3:
-        send_text(open_kfid, user_id, "我只能帮你搞定旅行相关的事哦～发个酒店或告诉我你要去哪里？")
-        return
-    if offtopic_count == 2:
-        log_usage(user_id, "deepseek")
-        reply = deepseek_chat(text) + "\n\n（我主要负责旅行规划，有什么行程问题吗？）"
-        send_text(open_kfid, user_id, reply)
-        return
-
     log_usage(user_id, "deepseek")
-    reply = deepseek_chat(text)
+    reply = deepseek_chat(text, city=user.get("city", ""))
     send_text(open_kfid, user_id, reply)
 
 # ── 和风天气 ─────────────────────────────────────────────────────────────────
