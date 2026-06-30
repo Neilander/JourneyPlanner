@@ -182,6 +182,26 @@ def kv_set(key: str, value: str):
         conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (key, value))
         conn.commit()
 
+# ── 对话历史（最近N轮，用于闲聊上下文）──────────────────────────────────────────
+CHAT_HISTORY_TURNS = 3   # 保留最近3轮问答
+
+def get_chat_history(wecom_id: str) -> list[dict]:
+    raw = kv_get(f"chat_history:{wecom_id}")
+    if not raw:
+        return []
+    try:
+        return json.loads(raw)
+    except Exception:
+        return []
+
+def append_chat_history(wecom_id: str, user_msg: str, assistant_msg: str):
+    history = get_chat_history(wecom_id)
+    history.append({"role": "user", "content": user_msg})
+    history.append({"role": "assistant", "content": assistant_msg})
+    # 只保留最近 N 轮（每轮2条）
+    history = history[-(CHAT_HISTORY_TURNS * 2):]
+    kv_set(f"chat_history:{wecom_id}", json.dumps(history, ensure_ascii=False))
+
 def is_processed(msgid: str) -> bool:
     """检查msgid是否已处理过，是则返回True，否则写入并返回False"""
     try:
@@ -679,19 +699,22 @@ PERSONA_PROMPT = """你是「旅途向导」，一个旅行规划小助手。风
 - 用户问「怎么用」「有什么功能」，用上面的内容简洁回答
 - 用户问「现在的城市」「目的地是哪」时，告知当前设置的城市"""
 
-def deepseek_chat(user_msg: str, city: str = "") -> str:
+def deepseek_chat(user_msg: str, city: str = "", history: list[dict] = None) -> str:
     if not DEEPSEEK_KEY:
         return "有什么旅行相关的问题都可以问我～发酒店链接或截图，我帮你整理候选名单！"
     system = PERSONA_PROMPT
     if city:
         system += f"\n\n【当前用户目的地城市】{city}"
+    messages = [{"role": "system", "content": system}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_msg})
     try:
         r = requests.post(
             "https://api.deepseek.com/chat/completions",
             headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
             json={"model": "deepseek-chat", "max_tokens": 150,
-                  "messages": [{"role": "system", "content": system},
-                                {"role": "user",   "content": user_msg}]},
+                  "messages": messages},
             timeout=15
         ).json()
         return r["choices"][0]["message"]["content"].strip()
@@ -906,6 +929,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         log_usage(user_id, "deepseek")
         reply = query_attraction_status(text, user.get("city", ""))
         send_text(open_kfid, user_id, reply)
+        append_chat_history(user_id, text, reply)
         return
 
     # 分支C：普通闲聊
@@ -915,8 +939,10 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         return
 
     log_usage(user_id, "deepseek")
-    reply = deepseek_chat(text, city=user.get("city", ""))
+    history = get_chat_history(user_id)
+    reply = deepseek_chat(text, city=user.get("city", ""), history=history)
     send_text(open_kfid, user_id, reply)
+    append_chat_history(user_id, text, reply)
 
 # ── 和风天气 ─────────────────────────────────────────────────────────────────
 
