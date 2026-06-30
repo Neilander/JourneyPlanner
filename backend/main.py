@@ -836,7 +836,11 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
                 raw_text=text[:500],
                 platform=ctrip.get("platform", "")
             )
-            set_user_city(user_id, ctrip["city"])
+            old_city = user.get("city", "")
+            city_switched = bool(ctrip["city"]) and ctrip["city"] != old_city
+            if ctrip["city"]:
+                set_user_city(user_id, ctrip["city"])
+                user["city"] = ctrip["city"]
             # 后台异步触发评价分析
             threading.Thread(
                 target=run_hotel_analysis,
@@ -846,12 +850,14 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
             hotel_count += 1
             loc_str = f"📍 已定位到地图" if lat else "（坐标定位失败，后续补）"
             platform_str = f" [{ctrip.get('platform', '')}]" if ctrip.get('platform') else ""
+            switch_str = f"\n\n🔄 检测到城市变化，已将目的地切换为「{ctrip['city']}」" if city_switched else ""
             send_text(open_kfid, user_id,
                 f"✅ 已记录：{ctrip['name']}"
                 + (f"（{ctrip['rating']}分）" if ctrip["rating"] else "")
                 + platform_str
-                + f"\n{loc_str}\n\n"
-                f"当前候选酒店：{hotel_count} 家\n"
+                + f"\n{loc_str}"
+                + switch_str
+                + f"\n\n当前候选酒店：{hotel_count} 家\n"
                 f"继续发酒店，或发「看结果」打开对比页面")
         else:
             send_text(open_kfid, user_id,
