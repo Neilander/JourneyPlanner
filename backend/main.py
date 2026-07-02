@@ -37,7 +37,7 @@ def init_db():
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             wecom_id    TEXT UNIQUE NOT NULL,
             bot_state   INTEGER DEFAULT 1,  -- 1=onboarding 2=chitchat 3=import 4=delivery
-            city                 TEXT DEFAULT '西安',
+            city                 TEXT DEFAULT '',
             selected_attractions TEXT DEFAULT '[]',
             created_at           DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -115,6 +115,14 @@ def migrate_db():
         if "push_enabled" not in user_cols:
             conn.execute("ALTER TABLE users ADD COLUMN push_enabled INTEGER DEFAULT 1")
             print("DB migration: added push_enabled column to users")
+        # 修正：city 默认值曾为'西安'，把没有西安酒店的用户的 city 重置为空
+        conn.execute("""
+            UPDATE users SET city=''
+            WHERE city='西安'
+            AND id NOT IN (
+                SELECT DISTINCT user_id FROM hotels WHERE city='西安'
+            )
+        """)
         conn.commit()
 
 migrate_db()
