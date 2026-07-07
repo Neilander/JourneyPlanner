@@ -1471,80 +1471,237 @@ def handle_plan_trip(open_kfid: str, user_id: str, city: str, days: int, prefere
         f"3️⃣ 两种都参考\n\n"
         f"回复 1、2 或 3")
 
+def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
+    """在规划流程某状态内识别子意图，处理名称/编号混用和语音矛盾。
+    返回 dict，如 {"intent":"select","indices":[0,2]} (0-based)
+    """
+    n = len(pois)
+    poi_list_str = "\n".join(f"{i+1}. {p['name']}" for i, p in enumerate(pois))
+
+    prompts = {
+        "selecting_transport": (
+            "用户正在选择出行交通方式，选项：1公共交通 2自驾 3两种都参考。\n"
+            "只返回JSON：\n"
+            '{"intent":"select","mode":"transit"}  ← 公共交通\n'
+            '{"intent":"select","mode":"driving"}   ← 自驾\n'
+            '{"intent":"select","mode":"both"}      ← 两种都参考\n'
+            '{"intent":"cancel"}                    ← 取消规划'
+        ),
+        "selecting_attractions": (
+            f"用户正在从以下景点列表做选择：\n{poi_list_str}\n\n"
+            "用户可能用编号、名称或自然语言表达选择；语音输入可能有矛盾（如'要1不对要3'），"
+            "请自动去除矛盾，只保留最终意图。\n"
+            "只返回JSON（indices为1-based编号列表）：\n"
+            '{"intent":"select","indices":[1,3]}    ← 选景点\n'
+            '{"intent":"query","target":"景点名"}   ← 想了解某景点\n'
+            '{"intent":"refresh","preference":""}   ← 换一批景点\n'
+            '{"intent":"back"}                      ← 返回交通方式选择\n'
+            '{"intent":"cancel"}                    ← 取消规划'
+        ),
+        "selecting_restaurants": (
+            f"用户正在从以下餐厅列表做选择：\n{poi_list_str}\n\n"
+            "用户可能用编号、名称或自然语言；语音矛盾自动去除，只保留最终意图。\n"
+            "只返回JSON（indices为1-based编号列表）：\n"
+            '{"intent":"select","indices":[2,4]}    ← 选餐厅\n'
+            '{"intent":"skip"}                      ← 跳过餐厅直接生成行程\n'
+            '{"intent":"query","target":"餐厅名"}   ← 想了解某餐厅\n'
+            '{"intent":"refresh","preference":""}   ← 换一批餐厅\n'
+            '{"intent":"back"}                      ← 返回景点选择\n'
+            '{"intent":"cancel"}                    ← 取消规划'
+        ),
+    }
+
+    system = prompts.get(state, "")
+    if DEEPSEEK_KEY and system:
+        try:
+            r = requests.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+                json={"model": "deepseek-chat", "max_tokens": 60,
+                      "messages": [{"role": "system", "content": system},
+                                    {"role": "user",   "content": text}]},
+                timeout=8
+            ).json()
+            obj = json.loads(r["choices"][0]["message"]["content"].strip())
+            # 把 1-based indices 转成 0-based，过滤越界
+            if "indices" in obj:
+                obj["indices"] = [i-1 for i in obj["indices"] if 1 <= i <= n]
+            return obj
+        except Exception as e:
+            print(f"[plan_sub_intent] error: {e}")
+
+    # 兜底：纯数字解析
+    nums = [int(x)-1 for x in re.findall(r'\d+', text) if 1 <= int(x) <= n]
+    if nums:
+        return {"intent": "select", "indices": list(dict.fromkeys(nums))}
+    if any(k in text for k in ("跳过", "不选", "直接")):
+        return {"intent": "skip"}
+    if any(k in text for k in ("返回", "上一步", "重选")):
+        return {"intent": "back"}
+    if any(k in text for k in ("取消", "算了", "不规划")):
+        return {"intent": "cancel"}
+    return {"intent": "unknown"}
+
+
+def _show_attractions(open_kfid, user_id, city, preference, page=0):
+    """搜景点并展示，支持翻页（换一批）"""
+    keywords = preference or "热门景点"
+    attractions = search_pois(city, keywords, "110000", limit=8)
+    if not attractions:
+        send_text(open_kfid, user_id, f"没找到更多{city}景点了，换个关键词试试？")
+        return
+    plan_set(user_id, "attractions", attractions)
+    plan_set(user_id, "state", "selecting_attractions")
+    reply = (f"📍 {city} 景点推荐（回复编号或名称，可多选）：\n\n"
+             f"{format_poi_list(attractions)}\n\n"
+             f"可以发数字、景点名，或说「换一批」「想了解XX」「返回」")
+    send_text(open_kfid, user_id, reply)
+
+
+def _show_restaurants(open_kfid, user_id, city, preference):
+    """搜餐厅并展示"""
+    rest_keywords = f"{preference}美食" if preference else "特色餐厅"
+    restaurants = search_pois(city, rest_keywords, "050000", limit=6)
+    if not restaurants:
+        return []
+    plan_set(user_id, "restaurants", restaurants)
+    plan_set(user_id, "state", "selecting_restaurants")
+    reply = (f"🍜 {city} 餐厅推荐（回复编号或名称，1-3 家）：\n\n"
+             f"{format_poi_list(restaurants)}\n\n"
+             f"可发数字、餐厅名，「跳过」直接生成行程，或「换一批」「返回」")
+    send_text(open_kfid, user_id, reply)
+    return restaurants
+
+
 def handle_plan_selection(open_kfid: str, user_id: str, text: str):
-    """处理用户在行程规划各步骤的输入"""
+    """处理用户在行程规划各步骤的输入，每步先做子意图分类再分流"""
     state = plan_get(user_id, "state")
     meta  = plan_get(user_id, "meta") or {}
-    city  = meta.get("city", "")
-    days  = meta.get("days", 2)
+    city           = meta.get("city", "")
+    days           = meta.get("days", 2)
     preference     = meta.get("preference", "")
     transport_mode = meta.get("transport_mode", "both")
 
+    # ── 交通方式选择 ──────────────────────────────────────────────────────────
     if state == "selecting_transport":
-        mode_map = {"1": "transit", "2": "driving", "3": "both",
-                    "公共交通": "transit", "地铁": "transit", "公交": "transit",
-                    "自驾": "driving", "开车": "driving", "驾车": "driving",
-                    "都": "both", "两种": "both", "都要": "both"}
-        chosen = next((v for k, v in mode_map.items() if k in text), None)
-        if not chosen:
+        sub = _plan_sub_intent(text, state, [])
+        if sub.get("intent") == "cancel":
+            plan_clear(user_id)
+            send_text(open_kfid, user_id, "已取消行程规划，随时可以重新开始～")
+            return
+        mode = sub.get("mode")
+        if not mode:
             send_text(open_kfid, user_id, "回复 1（公共交通）、2（自驾）或 3（两种都参考）就行～")
             return
-        meta["transport_mode"] = chosen
+        meta["transport_mode"] = mode
         plan_set(user_id, "meta", meta)
-
-        send_text(open_kfid, user_id, f"好的，按{_MODE_LABEL[chosen]}规划！帮你查{city}热门景点，稍等～ 🗺️")
-        keywords = preference or "热门景点"
-        attractions = search_pois(city, keywords, "110000", limit=8)
-        if not attractions:
-            send_text(open_kfid, user_id, f"没找到{city}的景点数据，换个城市或关键词试试？")
-            plan_clear(user_id)
-            return
-        plan_set(user_id, "attractions", attractions)
-        plan_set(user_id, "state", "selecting_attractions")
-        reply = (f"📍 {city} 热门景点（回复编号选择，如「1 3 5」，可多选）：\n\n"
-                 f"{format_poi_list(attractions)}\n\n"
-                 f"选好后我再给你推荐餐厅～")
-        send_text(open_kfid, user_id, reply)
+        send_text(open_kfid, user_id, f"按{_MODE_LABEL[mode]}规划！帮你查{city}景点，稍等～ 🗺️")
+        threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, preference), daemon=True).start()
         return
 
+    # ── 景点选择 ──────────────────────────────────────────────────────────────
     if state == "selecting_attractions":
         attractions = plan_get(user_id, "attractions") or []
-        indices = parse_selection(text, len(attractions))
-        if not indices:
-            send_text(open_kfid, user_id, f"没看出你选了哪些，回复数字编号就行，比如「1 3 5」～")
+        sub = _plan_sub_intent(text, state, attractions)
+        intent = sub.get("intent")
+
+        if intent == "cancel":
+            plan_clear(user_id)
+            send_text(open_kfid, user_id, "已取消行程规划，随时可以重新开始～")
             return
-        selected_attractions = [attractions[i] for i in indices]
-        plan_set(user_id, "selection", {"attractions": selected_attractions, "restaurants": []})
 
-        # 搜餐厅
-        send_text(open_kfid, user_id, "好！再帮你找几家附近的餐厅 🍜")
-        rest_keywords = f"{preference}美食" if preference else "特色餐厅"
-        restaurants = search_pois(city, rest_keywords, "050000", limit=6)
-        if not restaurants:
-            plan_set(user_id, "state", "generating")
-            _trigger_bundle_generation(open_kfid, user_id, selected_attractions, [], city, days, preference, transport_mode)
+        if intent == "back":
+            plan_set(user_id, "state", "selecting_transport")
+            send_text(open_kfid, user_id,
+                f"好，重新选择出行方式：\n\n"
+                f"1️⃣ 公共交通　2️⃣ 自驾　3️⃣ 两种都参考\n\n回复 1、2 或 3")
             return
-        plan_set(user_id, "restaurants", restaurants)
-        plan_set(user_id, "state", "selecting_restaurants")
 
-        reply = (f"🍜 {city} 附近餐厅（选 1-3 家，回复编号）：\n\n"
-                 f"{format_poi_list(restaurants)}\n\n"
-                 f"不想选餐厅发「跳过」直接生成行程～")
-        send_text(open_kfid, user_id, reply)
+        if intent == "refresh":
+            pref = sub.get("preference", preference)
+            send_text(open_kfid, user_id, "换一批景点，稍等～")
+            threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, pref), daemon=True).start()
+            return
 
-    elif state == "selecting_restaurants":
-        selection = plan_get(user_id, "selection") or {}
-        selected_attractions = selection.get("attractions", [])
+        if intent == "query":
+            target = sub.get("target", "")
+            send_text(open_kfid, user_id, f"帮你查一下「{target}」的最新情况～")
+            def _q():
+                reply = query_attraction_status(target, city)
+                send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选景点，或发「换一批」")
+            threading.Thread(target=_q, daemon=True).start()
+            return
+
+        if intent == "select":
+            indices = sub.get("indices", [])
+            if not indices:
+                send_text(open_kfid, user_id, "没看清你选了哪些～发编号（如「1 3」）或景点名都行")
+                return
+            selected_attractions = [attractions[i] for i in indices if i < len(attractions)]
+            plan_set(user_id, "selection", {"attractions": selected_attractions, "restaurants": []})
+            names = "、".join(p["name"] for p in selected_attractions)
+            send_text(open_kfid, user_id, f"选好了：{names} ✅\n\n帮你找几家餐厅，稍等～ 🍜")
+            def _next(sa=selected_attractions):
+                rests = _show_restaurants(open_kfid, user_id, city, preference)
+                if not rests:
+                    _trigger_bundle_generation(open_kfid, user_id, sa, [], city, days, preference, transport_mode)
+            threading.Thread(target=_next, daemon=True).start()
+            return
+
+        send_text(open_kfid, user_id, "没明白你的意思～发编号选景点，或说「换一批」「返回」")
+        return
+
+    # ── 餐厅选择 ──────────────────────────────────────────────────────────────
+    if state == "selecting_restaurants":
         restaurants = plan_get(user_id, "restaurants") or []
+        selection   = plan_get(user_id, "selection") or {}
+        selected_attractions = selection.get("attractions", [])
+        sub    = _plan_sub_intent(text, state, restaurants)
+        intent = sub.get("intent")
 
-        if "跳过" in text:
-            selected_restaurants = []
-        else:
-            indices = parse_selection(text, len(restaurants))
-            selected_restaurants = [restaurants[i] for i in indices] if indices else []
+        if intent == "cancel":
+            plan_clear(user_id)
+            send_text(open_kfid, user_id, "已取消行程规划，随时可以重新开始～")
+            return
 
-        plan_set(user_id, "state", "generating")
-        _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selected_restaurants, city, days, preference, transport_mode)
+        if intent == "back":
+            plan_set(user_id, "state", "selecting_attractions")
+            attractions = plan_get(user_id, "attractions") or []
+            if attractions:
+                reply = (f"返回景点选择 👇\n\n{format_poi_list(attractions)}\n\n"
+                         f"重新发编号或名称选景点，或说「换一批」")
+                send_text(open_kfid, user_id, reply)
+            else:
+                threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, preference), daemon=True).start()
+            return
+
+        if intent == "refresh":
+            pref = sub.get("preference", preference)
+            send_text(open_kfid, user_id, "换一批餐厅，稍等～")
+            threading.Thread(target=_show_restaurants, args=(open_kfid, user_id, city, pref), daemon=True).start()
+            return
+
+        if intent == "query":
+            target = sub.get("target", "")
+            send_text(open_kfid, user_id, f"帮你查一下「{target}」～")
+            def _q():
+                reply = query_attraction_status(target, city)
+                send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选餐厅，或发「跳过」直接生成行程")
+            threading.Thread(target=_q, daemon=True).start()
+            return
+
+        if intent in ("skip", "select"):
+            if intent == "skip":
+                selected_restaurants = []
+            else:
+                indices = sub.get("indices", [])
+                selected_restaurants = [restaurants[i] for i in indices if i < len(restaurants)]
+            plan_set(user_id, "state", "generating")
+            _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selected_restaurants,
+                                       city, days, preference, transport_mode)
+            return
+
+        send_text(open_kfid, user_id, "没明白～发编号选餐厅，「跳过」直接生成，或说「换一批」「返回」")
 
 def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selected_restaurants,
                                 city, days, preference, transport_mode="both"):
