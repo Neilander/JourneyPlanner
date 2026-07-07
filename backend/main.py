@@ -617,26 +617,33 @@ HOTEL_DOMAINS = ["ctrip", "qunar", "meituan", "fliggy", "alitrip", "ly.com",
 INTENT_SYSTEM = """你是意图分类器。判断用户消息属于哪种意图，只返回JSON，不要其他文字。
 
 意图说明：
-- import   : 用户在分享/添加酒店（含链接、分享文本、转发卡片）
-- done     : 用户想看地图/结果/候选名单
-- clear    : 用户想清空/删除全部候选酒店
-- delete   : 用户想去掉/删除/取消某个具体酒店或某个城市的酒店
-- restore  : 用户想撤销/恢复刚才删除的酒店（如"删错了""帮我恢复""撤销删除""找回刚才那个"等）
-- set_city : 用户明确或隐含地表达想去某个城市旅行，包括但不限于：直接切换（"改成成都""换到北京""目的地改为上海"）、计划表达（"我想去杭州""打算去西安玩""下周飞成都""准备去重庆"）、询问建议时顺带提城市（"我要去广州，有什么推荐吗"）。只要核心意图是"前往某城市"，就判定为 set_city，把城市名填入 target。
-- confirm  : 用户在回答上一个问题时表示同意/确认（如"好""可以""确认""换吧""没问题""嗯""行"等）
-- cancel   : 用户在回答上一个问题时表示拒绝/取消（如"不""算了""取消""不换""不用了"等）
-- attraction_query : 用户想了解某个景点/目的地的实时/近期情况，包括：人流量、是否拥挤、排队情况、是否开放、有无特殊通知、值不值得去、天气适不适合游览、近期评价等。例句："大雁塔现在人多吗""故宫今天开门吗""西湖值得专门去一趟吗""颐和园最近人怎么样""峨眉山这周天气适合爬山吗"
-- plan_trip : 用户想规划一次旅行行程（如"帮我规划成都三天""我想去西安玩两天怎么安排""推荐一下北京的行程"等），提取城市/天数/偏好填入target/days/preference字段
-- chitchat : 旅行咨询或其他闲聊
+- import              : 用户在分享/添加酒店（含链接、分享文本、转发卡片）
+- done                : 用户想看地图/结果/候选名单
+- clear               : 用户想清空/删除全部候选酒店
+- delete              : 用户想去掉/删除/取消某个具体酒店或某个城市的酒店
+- restore             : 用户想撤销/恢复刚才删除的酒店（如"删错了""帮我恢复""撤销删除"等）
+- set_city            : 用户只是切换目的地城市，没有明确要求规划行程或看景点推荐（如"改成成都""换到北京""目的地改为上海""下周飞成都"）
+- confirm             : 用户表示同意/确认（如"好""可以""确认""嗯""行"等）
+- cancel              : 用户表示拒绝/取消（如"不""算了""取消""不换""不用了"等）
+- attraction_query    : 用户想了解某景点的实时/近期情况（人流、开放状态、排队、特殊通知等）。例："大雁塔现在人多吗""故宫今天开门吗""峨眉山这周适合爬山吗"
+- attraction_recommend: 用户想知道某城市/目的地有哪些值得去的景点或餐厅，但不要求完整行程规划。例："成都有什么好玩的""推荐几个西安必去的地方""北京适合亲子的景点""成都好吃的在哪"
+- plan_trip           : 用户明确要求规划/安排一次具体行程，通常包含天数或行程安排意图。例："帮我规划成都三天""西安两天怎么安排""给我做个行程表"。必填字段：target(城市)、days(天数，默认2)、preference(偏好关键词，可为空)
+- chitchat            : 旅行咨询或其他闲聊
+
+优先级说明（有歧义时）：
+- 含天数/行程/规划 → plan_trip
+- 只问有什么/推荐什么景点餐厅 → attraction_recommend
+- 只说去哪个城市没有其他意图 → set_city
 
 返回格式（仅JSON）：
 {"intent": "chitchat"}
-{"intent": "delete", "target": "上海"}   ← delete时填城市名或酒店关键词
+{"intent": "delete", "target": "上海"}
 {"intent": "restore"}
-{"intent": "set_city", "target": "成都"} ← target填城市名
+{"intent": "set_city", "target": "成都"}
 {"intent": "confirm"}
 {"intent": "cancel"}
 {"intent": "attraction_query"}
+{"intent": "attraction_recommend", "target": "成都", "preference": "亲子"}
 {"intent": "plan_trip", "target": "成都", "days": 3, "preference": "历史美食"}
 {"intent": "import"}"""
 
@@ -678,21 +685,24 @@ def _do_save_hotel(open_kfid: str, user_id: str, user: dict, ctrip: dict, raw_te
         + f"\n\n当前候选酒店：{hotel_count} 家\n"
         f"继续发酒店，或发「看结果」打开对比页面")
 
-def classify_intent(text: str, msgtype: str) -> tuple[str, str]:
-    """返回 (intent, target)。target 仅 delete 时有值。"""
+def classify_intent(text: str, msgtype: str) -> tuple[str, str, dict]:
+    """返回 (intent, target, extras)。
+    target: delete/set_city/plan_trip/attraction_recommend 时有值（城市或关键词）
+    extras: plan_trip 时含 {"days": int, "preference": str}；其他意图为 {}
+    """
     # 1. 非文字消息直接判 import
     if msgtype in ("image", "miniprogram", "miniprogram_text"):
-        return ("import", "")
+        return ("import", "", {})
     # 2. 含酒店链接 → import
     if re.search(r'https?://', text) and any(k in text for k in HOTEL_DOMAINS):
-        return ("import", "")
+        return ("import", "", {})
     # 3. DeepSeek 意图分类（有 key 时）
     if DEEPSEEK_KEY:
         try:
             r = requests.post(
                 "https://api.deepseek.com/chat/completions",
                 headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
-                json={"model": "deepseek-chat", "max_tokens": 60,
+                json={"model": "deepseek-chat", "max_tokens": 80,
                       "messages": [{"role": "system", "content": INTENT_SYSTEM},
                                     {"role": "user",   "content": text}]},
                 timeout=8
@@ -701,22 +711,22 @@ def classify_intent(text: str, msgtype: str) -> tuple[str, str]:
             obj = json.loads(raw)
             intent = obj.get("intent", "chitchat")
             target = obj.get("target", "")
-            # 额外验证：import 意图还要看文本里是否真的有酒店数据
+            extras = {k: v for k, v in obj.items() if k not in ("intent", "target")}
             if intent == "import" and not parse_hotel_text(text):
                 intent = "import_hint"
-            return (intent, target)
+            return (intent, target, extras)
         except Exception as e:
             print("intent classify error:", e)
     # 4. 无 key 时纯关键词兜底
     if parse_hotel_text(text):
-        return ("import", "")
+        return ("import", "", {})
     if any(k in text for k in CLEAR_KEYWORDS):
-        return ("clear", "")
+        return ("clear", "", {})
     if any(k in text for k in DONE_KEYWORDS_SET):
-        return ("done", "")
+        return ("done", "", {})
     if is_attraction_query_fallback(text):
-        return ("attraction_query", "")
-    return ("chitchat", "")
+        return ("attraction_query", "", {})
+    return ("chitchat", "", {})
 
 # ── 景点实时情况查询 ──────────────────────────────────────────────────────────
 
@@ -874,7 +884,7 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         user["open_kfid"] = open_kfid
     bot_state = user["bot_state"]
     hotel_count = get_hotel_count(user["id"])
-    intent, delete_target = classify_intent(text, msgtype)
+    intent, delete_target, intent_extras = classify_intent(text, msgtype)
 
     # 天气推送开关
     if msgtype == "text" and text.strip() in ("开启天气提醒", "打开天气提醒", "天气提醒"):
@@ -1077,31 +1087,38 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         return
 
     # 分支：行程规划 F4
+    if intent == "attraction_recommend" and msgtype == "text":
+        city       = delete_target.strip() or user.get("city", "")
+        preference = intent_extras.get("preference", "")
+        if not city:
+            send_text(open_kfid, user_id, "你想了解哪个城市的景点或餐厅呢？")
+            return
+        def _recommend():
+            kw_attraction = f"{preference}景点" if preference else "热门景点"
+            kw_restaurant = f"{preference}美食" if preference else "特色餐厅"
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                fa = ex.submit(search_pois, city, kw_attraction, "110000", 6)
+                fr = ex.submit(search_pois, city, kw_restaurant, "050000", 5)
+                attractions = fa.result()
+                restaurants = fr.result()
+            lines = [f"📍 {city}{'·' + preference if preference else ''} 推荐\n"]
+            if attractions:
+                lines.append("【景点】")
+                lines.append(format_poi_list(attractions))
+            if restaurants:
+                lines.append("\n【餐厅】")
+                lines.append(format_poi_list(restaurants, start_idx=len(attractions) + 1))
+            lines.append("\n想规划具体行程？告诉我天数，我帮你安排路线～")
+            send_text(open_kfid, user_id, "\n".join(lines))
+        send_text(open_kfid, user_id, f"帮你查{city}的景点和餐厅，稍等～ 🗺️")
+        threading.Thread(target=_recommend, daemon=True).start()
+        return
+
     if intent == "plan_trip" and msgtype == "text":
         city       = delete_target.strip() or user.get("city", "")
-        days       = int(plan_get(user_id, "_tmp_days") or 2)
-        preference = ""
-        # 从 classify_intent 返回的扩展字段里取 days/preference
-        # INTENT_SYSTEM 已要求返回 {"intent":"plan_trip","target":"城市","days":N,"preference":"偏好"}
-        # classify_intent 目前只返回 (intent, target)，需要临时从 kv 取扩展字段
-        # 下面直接让 DeepSeek 再提取一次（成本极低，max_tokens=60）
-        try:
-            exr = requests.post(
-                "https://api.deepseek.com/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
-                json={"model": "deepseek-chat", "max_tokens": 60,
-                      "messages": [
-                          {"role": "system", "content": '从用户消息提取旅行信息，只返回JSON：{"city":"城市","days":天数整数,"preference":"偏好关键词"}'},
-                          {"role": "user", "content": text}
-                      ]},
-                timeout=8
-            ).json()
-            info = json.loads(exr["choices"][0]["message"]["content"].strip())
-            city       = info.get("city", city) or city
-            days       = int(info.get("days", 2))
-            preference = info.get("preference", "")
-        except Exception:
-            pass
+        days       = int(intent_extras.get("days", 2))
+        preference = intent_extras.get("preference", "")
         if not city:
             send_text(open_kfid, user_id, "你想规划哪个城市的行程呢？告诉我城市名就行～")
             return
