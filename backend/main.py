@@ -1456,7 +1456,7 @@ def format_poi_list(pois: list[dict], start_idx: int = 1) -> str:
     lines = []
     for i, p in enumerate(pois):
         rating_str = f" ⭐{p['rating']}" if p.get("rating") else ""
-        lines.append(f"{start_idx + i}. {p['name']}{rating_str}\n   📍 {p['address'] or '暂无地址'}")
+        lines.append(f"{start_idx + i}. {p['name']}{rating_str}")
     return "\n".join(lines)
 
 def handle_plan_trip(open_kfid: str, user_id: str, city: str, days: int, preference: str):
