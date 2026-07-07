@@ -730,6 +730,34 @@ def classify_intent(text: str, msgtype: str) -> tuple[str, str, dict]:
 
 # ── 景点实时情况查询 ──────────────────────────────────────────────────────────
 
+ATTRACTION_INTRO_PROMPT = """你是旅行助手，用自身知识介绍用户询问的景点或餐厅。
+
+要求：
+- 150字以内，简洁温暖
+- 涵盖：是什么、有什么特色、适合哪类人、大概游览时间
+- 结尾可加一句贴心提示（如最佳季节、注意事项）
+- 不要编造具体票价或开放时间数字"""
+
+def query_attraction_intro(name: str, city: str = "") -> str:
+    """用 DeepSeek 自身知识介绍景点/餐厅，不走 SerpAPI"""
+    if not DEEPSEEK_KEY:
+        return f"暂时无法获取「{name}」的介绍，建议直接搜索了解～"
+    try:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+            json={"model": "deepseek-chat", "max_tokens": 200,
+                  "messages": [
+                      {"role": "system", "content": ATTRACTION_INTRO_PROMPT},
+                      {"role": "user", "content": f"{'【' + city + '】' if city else ''}「{name}」是什么地方？"},
+                  ]},
+            timeout=12
+        ).json()
+        return r["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[attraction_intro] error: {e}")
+        return f"暂时无法介绍「{name}」，建议直接搜索了解～"
+
 ATTRACTION_QUERY_PROMPT = """你是旅行助手，根据以下搜索结果回答用户关于景点的最新情况（人流、开放状态、特殊通知等）。
 
 要求：
@@ -1491,23 +1519,29 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             f"用户正在从以下景点列表做选择：\n{poi_list_str}\n\n"
             "用户可能用编号、名称或自然语言表达选择；语音输入可能有矛盾（如'要1不对要3'），"
             "请自动去除矛盾，只保留最终意图。\n"
+            "query_intro：想了解景点的介绍/特色/是什么（如'这是什么地方''有什么好玩的'）\n"
+            "query_realtime：想查景点实时状态（如'人多吗''开放吗''现在怎么样'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
-            '{"intent":"select","indices":[1,3]}    ← 选景点\n'
-            '{"intent":"query","target":"景点名"}   ← 想了解某景点\n'
-            '{"intent":"refresh","preference":""}   ← 换一批景点\n'
-            '{"intent":"back"}                      ← 返回交通方式选择\n'
-            '{"intent":"cancel"}                    ← 取消规划'
+            '{"intent":"select","indices":[1,3]}              ← 选景点\n'
+            '{"intent":"query_intro","target":"景点名"}       ← 想了解景点介绍\n'
+            '{"intent":"query_realtime","target":"景点名"}    ← 想查实时情况\n'
+            '{"intent":"refresh","preference":""}             ← 换一批景点\n'
+            '{"intent":"back"}                                ← 返回交通方式选择\n'
+            '{"intent":"cancel"}                              ← 取消规划'
         ),
         "selecting_restaurants": (
             f"用户正在从以下餐厅列表做选择：\n{poi_list_str}\n\n"
             "用户可能用编号、名称或自然语言；语音矛盾自动去除，只保留最终意图。\n"
+            "query_intro：想了解餐厅的介绍/特色/口味（如'这家什么风格''好不好吃'）\n"
+            "query_realtime：想查实时情况（如'现在排队吗''今天几点关'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
-            '{"intent":"select","indices":[2,4]}    ← 选餐厅\n'
-            '{"intent":"skip"}                      ← 跳过餐厅直接生成行程\n'
-            '{"intent":"query","target":"餐厅名"}   ← 想了解某餐厅\n'
-            '{"intent":"refresh","preference":""}   ← 换一批餐厅\n'
-            '{"intent":"back"}                      ← 返回景点选择\n'
-            '{"intent":"cancel"}                    ← 取消规划'
+            '{"intent":"select","indices":[2,4]}              ← 选餐厅\n'
+            '{"intent":"skip"}                                ← 跳过餐厅直接生成行程\n'
+            '{"intent":"query_intro","target":"餐厅名"}       ← 想了解餐厅介绍\n'
+            '{"intent":"query_realtime","target":"餐厅名"}    ← 想查实时情况\n'
+            '{"intent":"refresh","preference":""}             ← 换一批餐厅\n'
+            '{"intent":"back"}                                ← 返回景点选择\n'
+            '{"intent":"cancel"}                              ← 取消规划'
         ),
     }
 
@@ -1623,12 +1657,18 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
             threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, pref), daemon=True).start()
             return
 
-        if intent == "query":
+        if intent in ("query_intro", "query_realtime"):
             target = sub.get("target", "")
-            send_text(open_kfid, user_id, f"帮你查一下「{target}」的最新情况～")
-            def _q():
-                reply = query_attraction_status(target, city)
-                send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选景点，或发「换一批」")
+            if intent == "query_intro":
+                send_text(open_kfid, user_id, f"帮你介绍一下「{target}」～")
+                def _q():
+                    reply = query_attraction_intro(target, city)
+                    send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选景点，或发「换一批」")
+            else:
+                send_text(open_kfid, user_id, f"帮你查一下「{target}」的最新情况～")
+                def _q():
+                    reply = query_attraction_status(target, city)
+                    send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选景点，或发「换一批」")
             threading.Thread(target=_q, daemon=True).start()
             return
 
@@ -1681,12 +1721,18 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
             threading.Thread(target=_show_restaurants, args=(open_kfid, user_id, city, pref), daemon=True).start()
             return
 
-        if intent == "query":
+        if intent in ("query_intro", "query_realtime"):
             target = sub.get("target", "")
-            send_text(open_kfid, user_id, f"帮你查一下「{target}」～")
-            def _q():
-                reply = query_attraction_status(target, city)
-                send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选餐厅，或发「跳过」直接生成行程")
+            if intent == "query_intro":
+                send_text(open_kfid, user_id, f"帮你介绍一下「{target}」～")
+                def _q():
+                    reply = query_attraction_intro(target, city)
+                    send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选餐厅，或发「跳过」直接生成行程")
+            else:
+                send_text(open_kfid, user_id, f"帮你查一下「{target}」的最新情况～")
+                def _q():
+                    reply = query_attraction_status(target, city)
+                    send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选餐厅，或发「跳过」直接生成行程")
             threading.Thread(target=_q, daemon=True).start()
             return
 
