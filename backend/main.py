@@ -1537,7 +1537,7 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             "重要规则：\n"
             "1. 只有当用户说的名称/编号与列表中某项明确匹配时，才返回 select。\n"
             "2. 如果用户提到的景点名称不在列表中（如'武侯祠''宽窄巷子'等），返回 search_add，不要猜测或选错误的列表项。\n"
-            "3. cancel 仅在用户明确说"不玩了""取消""算了不规划了"等时触发。\n"
+            '3. cancel 仅在用户明确说【不玩了】【取消】【算了不规划了】等时触发。\n'
             "query_intro：想了解景点的介绍/特色/是什么（如'这是什么地方''有什么好玩的'）\n"
             "query_realtime：想查景点实时状态（如'人多吗''开放吗''现在怎么样'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
@@ -1557,7 +1557,7 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             "重要规则：\n"
             "1. 只有当用户说的名称/编号与列表中某项明确匹配时，才返回 select。\n"
             "2. 如果用户提到的餐厅名称不在列表中，返回 search_add，不要猜测选错误项。\n"
-            "3. cancel 仅在用户明确说"不吃了""取消""算了"等时触发。\n"
+            '3. cancel 仅在用户明确说【不吃了】【取消】【算了】等时触发。\n'
             "query_intro：想了解餐厅的介绍/特色/口味（如'这家什么风格''好不好吃'）\n"
             "query_realtime：想查实时情况（如'现在排队吗''今天几点关'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
