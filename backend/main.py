@@ -1650,6 +1650,7 @@ _ATTRACTION_BUCKETS = [
 
 def _fetch_attractions_multi(city: str, preference: str, exclude_names: set = None) -> list[dict]:
     """并发搜多个类别，去重合并，排除已展示过的，返回最多 8 条"""
+    import concurrent.futures
     exclude = exclude_names or set()
     if preference:
         buckets = [(preference, ""), ("景区", "110000"), ("博物馆", "141200"), ("古迹", "110202")]
