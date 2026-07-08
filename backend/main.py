@@ -2055,16 +2055,26 @@ def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selecte
                                         city, days, preference, transport_mode)
         plan_set(user_id, "bundles", bundles_text)
         plan_set(user_id, "state", "idle")
-        # 持久化到 trips 历史表
+        # 持久化到 trips 历史表，获取 trip_id 用于链接
+        trip_id = None
         try:
             with get_db() as conn:
-                conn.execute(
+                cur = conn.execute(
                     "INSERT INTO trips (wecom_id, city, days, preference, bundle_text) VALUES (?,?,?,?,?)",
                     (user_id, city, days, preference, bundles_text)
                 )
+                trip_id = cur.lastrowid
         except Exception as e:
             print(f"[trips] save error: {e}")
-        send_text(open_kfid, user_id, bundles_text)
+        # 发链接，点击在网页端查看漂亮排版
+        if trip_id:
+            trip_url = f"{H5_URL}/trip?id={trip_id}"
+            send_text(open_kfid, user_id,
+                f"🗺️ {city} {days}日行程方案生成好啦！\n\n"
+                f"点击查看完整行程 👇\n{trip_url}\n\n"
+                f"行程包含 2 套方案，可在页面里切换～")
+        else:
+            send_text(open_kfid, user_id, bundles_text)
     threading.Thread(target=_gen, daemon=True).start()
 
 CITY_BRIEF_PROMPT = """你是旅行助手，根据下面的天气数据和搜索摘要，为用户生成一段目的地城市简报。
@@ -3036,6 +3046,18 @@ async def user_trips(wecom_id: str):
             (wecom_id,)
         ).fetchall()
     return {"trips": [dict(r) for r in rows]}
+
+@app.get("/api/trips/{trip_id}")
+async def get_trip(trip_id: int):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, city, days, preference, bundle_text, created_at FROM trips WHERE id=?",
+            (trip_id,)
+        ).fetchone()
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Trip not found")
+    return dict(row)
 
 @app.post("/api/admin/push_weather")
 async def admin_push_weather(body: dict):
