@@ -86,6 +86,16 @@ def init_db():
             action    TEXT NOT NULL,   -- 'msg' | 'ocr' | 'deepseek'
             ts        DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS trips (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            wecom_id    TEXT NOT NULL,
+            city        TEXT DEFAULT '',
+            days        INTEGER DEFAULT 2,
+            preference  TEXT DEFAULT '',
+            bundle_text TEXT NOT NULL,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_trips_wecom ON trips(wecom_id);
         CREATE INDEX IF NOT EXISTS idx_usage_log ON usage_log(wecom_id, action, ts);
         """)
 
@@ -1777,6 +1787,15 @@ def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selecte
                                         city, days, preference, transport_mode)
         plan_set(user_id, "bundles", bundles_text)
         plan_set(user_id, "state", "idle")
+        # 持久化到 trips 历史表
+        try:
+            with get_db() as conn:
+                conn.execute(
+                    "INSERT INTO trips (wecom_id, city, days, preference, bundle_text) VALUES (?,?,?,?,?)",
+                    (user_id, city, days, preference, bundles_text)
+                )
+        except Exception as e:
+            print(f"[trips] save error: {e}")
         send_text(open_kfid, user_id, bundles_text)
     threading.Thread(target=_gen, daemon=True).start()
 
@@ -2740,6 +2759,15 @@ async def delete_user_hotel(hotel_id: int, wecom_id: str):
         conn.execute("DELETE FROM hotels WHERE id=? AND user_id=?", (hotel_id, user["id"]))
         conn.commit()
     return {"ok": True}
+
+@app.get("/api/user/trips")
+async def user_trips(wecom_id: str):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, city, days, preference, bundle_text, created_at FROM trips WHERE wecom_id=? ORDER BY created_at DESC LIMIT 20",
+            (wecom_id,)
+        ).fetchall()
+    return {"trips": [dict(r) for r in rows]}
 
 @app.post("/api/admin/push_weather")
 async def admin_push_weather(body: dict):

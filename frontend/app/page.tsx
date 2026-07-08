@@ -109,6 +109,10 @@ export default function Home() {
   const [showHotelManager, setShowHotelManager] = useState(false)
   const [dockOpen, setDockOpen] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
+  const [showTrips, setShowTrips] = useState(false)
+  const [trips, setTrips] = useState<{ id: number; city: string; days: number; preference: string; bundle_text: string; created_at: string }[]>([])
+  const [tripsLoading, setTripsLoading] = useState(false)
+  const [expandedTrip, setExpandedTrip] = useState<number | null>(null)
   const [cityInput, setCityInput] = useState('')
   const [commuteMode, setCommuteMode] = useState<'transit' | 'driving' | 'walking'>('transit')
   const [cardShowPhoto, setCardShowPhoto] = useState(true)
@@ -311,6 +315,16 @@ export default function Home() {
   }
 
   toggleSelectRef.current = toggleSelect
+
+  const loadTrips = async () => {
+    if (!uidRef.current) return
+    setTripsLoading(true)
+    try {
+      const data = await fetch(`${API_BASE}/api/user/trips?wecom_id=${encodeURIComponent(uidRef.current)}`).then(r => r.json())
+      setTrips(data.trips || [])
+    } catch {}
+    setTripsLoading(false)
+  }
 
   const removeHotel = async (hotelId: string) => {
     // 先更新本地（markers useEffect 会自动重绘）
@@ -622,6 +636,12 @@ export default function Home() {
             <span className="c stack"><img src="/icons/icon-gear.png" alt="" /><span className="t">设置</span></span>
           </button>
 
+          {/* 历史规划 */}
+          <button className="pbtn b-set" onClick={() => { setShowTrips(true); loadTrips() }} title="历史规划">
+            <svg className="shape" viewBox="0 0 156 200" preserveAspectRatio="none"><path fill="var(--cream)" d={D_SET} /></svg>
+            <span className="c stack"><span style={{ fontSize: 19, lineHeight: 1 }}>🗺️</span><span className="t">行程</span></span>
+          </button>
+
           {/* 酒店管理（有酒店时） */}
           {hotels.length > 0 && (
             <button className="pbtn b-set" onClick={() => setShowHotelManager(true)} title="候选酒店">
@@ -818,6 +838,66 @@ export default function Home() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Trip history modal */}
+      {showTrips && (
+        <div className="absolute inset-0 bg-black/50 z-50 flex flex-col">
+          <div className="m-4 mt-16 rounded-2xl overflow-hidden flex flex-col max-h-[80vh]" style={{ background: 'var(--surface)' }}>
+            <div className="flex items-center justify-between p-3 border-b" style={{ borderColor: 'var(--cream)' }}>
+              <span className="font-medium text-sm" style={{ color: 'var(--ink)' }}>历史规划</span>
+              <div className="flex items-center gap-2">
+                <button onClick={loadTrips} className="text-xs px-2 py-0.5 rounded" style={{ color: 'var(--blue)' }}>↻ 刷新</button>
+                <button onClick={() => setShowTrips(false)} className="text-sm" style={{ color: 'var(--ink-mid)' }}>关闭</button>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {tripsLoading && (
+                <p className="text-center text-sm py-8 animate-pulse" style={{ color: 'var(--ink-mid)' }}>加载中…</p>
+              )}
+              {!tripsLoading && trips.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 gap-2">
+                  <span style={{ fontSize: 36 }}>🗺️</span>
+                  <p className="text-sm" style={{ color: 'var(--ink-mid)' }}>还没有规划记录</p>
+                  <p className="text-xs" style={{ color: 'var(--ink-mid)' }}>跟小蜜说「帮我规划X天行程」试试～</p>
+                </div>
+              )}
+              {!tripsLoading && trips.map(trip => {
+                const isExpanded = expandedTrip === trip.id
+                const dateStr = new Date(trip.created_at + 'Z').toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                const preview = trip.bundle_text.slice(0, 60).replace(/\n/g, ' ')
+                return (
+                  <div key={trip.id} className="border-b" style={{ borderColor: 'var(--cream)' }}>
+                    <button
+                      className="w-full px-4 py-3 text-left"
+                      onClick={() => setExpandedTrip(isExpanded ? null : trip.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-bold" style={{ color: 'var(--accent)' }}>{trip.city}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--cream)', color: 'var(--ink-mid)' }}>{trip.days}天</span>
+                          {trip.preference && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#eef4ff', color: 'var(--blue)' }}>{trip.preference}</span>
+                          )}
+                        </div>
+                        <span className="text-xs" style={{ color: 'var(--ink-mid)' }}>{dateStr}</span>
+                      </div>
+                      {!isExpanded && (
+                        <p className="text-xs mt-1 truncate" style={{ color: 'var(--ink-mid)' }}>{preview}…</p>
+                      )}
+                      <div className="text-right" style={{ color: 'var(--ink-mid)', fontSize: 11, marginTop: 2 }}>{isExpanded ? '▲ 收起' : '▼ 展开'}</div>
+                    </button>
+                    {isExpanded && (
+                      <div className="px-4 pb-4">
+                        <pre className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--ink)', fontFamily: 'inherit' }}>{trip.bundle_text}</pre>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
