@@ -1315,6 +1315,7 @@ def plan_set(user_id: str, field: str, value):
 def plan_clear(user_id: str):
     for field in ("state", "meta", "attractions", "restaurants", "selection", "bundles"):
         kv_set(f"plan_{field}:{user_id}", "")
+    kv_set(f"plan_attrpage:{user_id}", "0")
 
 def search_pois(city: str, keywords: str, poi_type: str = "", limit: int = 8) -> list[dict]:
     """高德 POI 搜索，返回标准化列表。poi_type 为空则不限类型（适合按名称精确查找）"""
@@ -1603,16 +1604,64 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
     return {"intent": "unknown"}
 
 
+# 景点多类别搜索配置：(关键词, 高德类型)
+_ATTRACTION_BUCKETS = [
+    ("景区",   "110000"),   # 风景名胜/自然景区
+    ("博物馆", "141200"),   # 博物馆
+    ("公园",   "110000"),   # 城市公园/郊野公园
+    ("古迹",   "110202"),   # 历史文物/文化景点
+    ("网红",   ""),         # 网红打卡（不限类型）
+]
+
+def _fetch_attractions_multi(city: str, preference: str, page: int = 0) -> list[dict]:
+    """并发搜多个类别，去重合并，返回最多 8 条。page 用于换一批（高德 page 从1开始）"""
+    amap_page = page + 1
+    if preference:
+        buckets = [(preference, ""), ("景区", "110000"), ("博物馆", "141200")]
+    else:
+        buckets = _ATTRACTION_BUCKETS
+
+    results: list[dict] = []
+    seen: set[str] = set()
+
+    def _fetch(kw, ptype):
+        params = {"key": AMAP_WEB_KEY, "city": city, "keywords": kw,
+                  "offset": 5, "page": amap_page, "extensions": "base"}
+        if ptype:
+            params["types"] = ptype
+        try:
+            r = requests.get(AMAP_POI_URL, params=params, timeout=8).json()
+            pois = []
+            for p in r.get("pois", []):
+                loc = p.get("location", "")
+                if not loc:
+                    continue
+                lng, lat = loc.split(",")
+                pois.append({
+                    "name": p.get("name", ""),
+                    "address": p.get("address", ""),
+                    "rating": p.get("biz_ext", {}).get("rating", "") if isinstance(p.get("biz_ext"), dict) else "",
+                    "lat": float(lat), "lng": float(lng), "id": p.get("id", ""),
+                })
+            return pois
+        except Exception as e:
+            print(f"[_fetch_attractions] {kw} error: {e}")
+            return []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(buckets)) as ex:
+        futures = [ex.submit(_fetch, kw, pt) for kw, pt in buckets]
+        for f in concurrent.futures.as_completed(futures):
+            for p in f.result():
+                if p["name"] not in seen:
+                    seen.add(p["name"])
+                    results.append(p)
+
+    return results[:8]
+
+
 def _show_attractions(open_kfid, user_id, city, preference, page=0):
     """搜景点并展示，支持翻页（换一批）"""
-    keywords = preference or "景区"
-    attractions = search_pois(city, keywords, "110000", limit=8)
-    # 结果太少时用备用关键词补充
-    if len(attractions) < 3:
-        extra = search_pois(city, "公园", "110000", limit=8)
-        seen = {p["name"] for p in attractions}
-        attractions += [p for p in extra if p["name"] not in seen]
-        attractions = attractions[:8]
+    attractions = _fetch_attractions_multi(city, preference, page)
     if not attractions:
         send_text(open_kfid, user_id, f"没找到更多{city}景点了，换个关键词试试？")
         return
@@ -1713,8 +1762,11 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
 
         if intent == "refresh":
             pref = sub.get("preference", preference)
+            cur_page = int(kv_get(f"plan_attrpage:{user_id}") or "0")
+            next_page = cur_page + 1
+            kv_set(f"plan_attrpage:{user_id}", str(next_page))
             send_text(open_kfid, user_id, "换一批景点，稍等～")
-            threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, pref), daemon=True).start()
+            threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, pref, next_page), daemon=True).start()
             return
 
         if intent in ("query_intro", "query_realtime"):
