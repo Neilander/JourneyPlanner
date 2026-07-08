@@ -1886,8 +1886,8 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
         _done_pat = _re3.compile(r'(生成行程|生成规划|好了生成|可以(了|生成)|好了.{0,4}(吧|～|！|!|$)|行程生成|开始生成)')
         if _done_pat.search(text):
             sub = {"intent": "done"}
-        # 预检：明确"加入/添加"动作 → search_add
         else:
+            # 预检：明确"加入/添加"动作 → search_add
             _add_pat2 = _re3.compile(
                 r'(加入|加进|添加|把.{1,10}加|我要.{1,10}(规划|行程)|我想加|帮我加|也加一下|加上).{0,6}(规划|行程|里|进来|上去)?'
             )
@@ -1897,8 +1897,8 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
                     sub = {"intent": "search_add", "target": _cleaned2}
                 else:
                     sub = _plan_sub_intent(text, state, restaurants)
-        else:
-            sub = _plan_sub_intent(text, state, restaurants)
+            else:
+                sub = _plan_sub_intent(text, state, restaurants)
         intent = sub.get("intent")
 
         if intent == "cancel":
