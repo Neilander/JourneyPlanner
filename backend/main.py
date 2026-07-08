@@ -1639,21 +1639,39 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
     return {"intent": "unknown"}
 
 
-# 景点多类别搜索配置：(关键词, 高德类型)
+# 景点多类别搜索配置：(关键词, 高德POI类型码)
+# 全部指定类型码，避免 Amap 返回学校/医院等无关地点
 _ATTRACTION_BUCKETS = [
-    ("景区",   "110000"),   # 风景名胜/自然景区
-    ("博物馆", "141200"),   # 博物馆
-    ("公园",   "110000"),   # 城市公园/郊野公园
-    ("古迹",   "110202"),   # 历史文物/文化景点
-    ("网红",   ""),         # 网红打卡（不限类型）
+    ("", "110201"),   # 游览景区
+    ("", "110202"),   # 古迹遗址
+    ("", "141200"),   # 博物馆
+    ("", "110101"),   # 公园
+    ("", "110103"),   # 广场/步行街（网红打卡类）
+    ("", "110200"),   # 风景名胜区
 ]
+
+# 名称含这些词的 POI 直接排除（学校、医院、政府机关等）
+_NON_ATTRACTION_KEYWORDS = {
+    "学校", "中学", "小学", "大学", "学院", "幼儿园", "培训", "职业技术",
+    "医院", "诊所", "卫生院", "药店",
+    "银行", "信用社", "保险",
+    "政府", "机关", "派出所", "公安", "法院", "检察",
+    "加油站", "停车场", "服务区",
+}
+
+def _is_tourist_attraction(name: str) -> bool:
+    return not any(kw in name for kw in _NON_ATTRACTION_KEYWORDS)
 
 def _fetch_attractions_multi(city: str, preference: str, exclude_names: set = None) -> list[dict]:
     """并发搜多个类别，去重合并，排除已展示过的，返回最多 8 条"""
     import concurrent.futures
     exclude = exclude_names or set()
     if preference:
-        buckets = [(preference, ""), ("景区", "110000"), ("博物馆", "141200"), ("古迹", "110202")]
+        # 有偏好时：先按偏好关键词+各大景点类型搜
+        buckets = [
+            (preference, "110201"), (preference, "141200"),
+            (preference, "110101"), (preference, "110202"),
+        ]
     else:
         buckets = _ATTRACTION_BUCKETS
 
@@ -1675,9 +1693,12 @@ def _fetch_attractions_multi(city: str, preference: str, exclude_names: set = No
                 loc = p.get("location", "")
                 if not loc:
                     continue
+                name = p.get("name", "")
+                if not _is_tourist_attraction(name):
+                    continue
                 lng, lat = loc.split(",")
                 pois.append({
-                    "name": p.get("name", ""),
+                    "name": name,
                     "address": p.get("address", ""),
                     "rating": p.get("biz_ext", {}).get("rating", "") if isinstance(p.get("biz_ext"), dict) else "",
                     "lat": float(lat), "lng": float(lng), "id": p.get("id", ""),
