@@ -948,6 +948,9 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         if plan_state in ("selecting_transport", "selecting_attractions", "selecting_restaurants"):
             handle_plan_selection(open_kfid, user_id, text)
             return
+        if plan_state == "generating":
+            send_text(open_kfid, user_id, "行程正在生成中，稍等片刻～ ⏳")
+            return
 
     # ── 状态1：Onboarding（首次进入）────────────────────────────────────────
     if bot_state == 1:
@@ -1563,7 +1566,8 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             "只返回JSON（indices为1-based编号列表）：\n"
             '{"intent":"select","indices":[2,4]}              ← 选列表中的餐厅（名称或编号能确认匹配）\n'
             '{"intent":"search_add","target":"餐厅名"}        ← 想添加列表中没有的餐厅\n'
-            '{"intent":"skip"}                                ← 跳过餐厅直接生成行程\n'
+            '{"intent":"done"}                                ← 选好了，生成行程（如"好了""生成""可以了""好了生成行程"）\n'
+            '{"intent":"skip"}                                ← 跳过餐厅直接生成行程（不选餐厅）\n'
             '{"intent":"query_intro","target":"餐厅名"}       ← 想了解餐厅介绍\n'
             '{"intent":"query_realtime","target":"餐厅名"}    ← 想查实时情况\n'
             '{"intent":"refresh","preference":""}             ← 换一批餐厅\n'
@@ -1877,17 +1881,22 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
         selection   = plan_get(user_id, "selection") or {}
         selected_attractions = selection.get("attractions", [])
 
-        # 预检：明确"加入/添加"动作 → search_add
+        # 预检：明确"生成行程/好了/可以了" → done（绕过 DeepSeek，避免 skip 清空已选餐厅）
         import re as _re3
-        _add_pat2 = _re3.compile(
-            r'(加入|加进|添加|把.{1,10}加|我要.{1,10}(规划|行程)|我想加|帮我加|也加一下|加上).{0,6}(规划|行程|里|进来|上去)?'
-        )
-        if _add_pat2.search(text):
-            _cleaned2 = _re3.sub(r'(帮我|把|将|加入规划|加进规划|加入行程|加进行程|加入|添加|加进来|加上|我要|我想|也|规划|行程)', '', text).strip()
-            if _cleaned2 and not any(p["name"] in _cleaned2 or _cleaned2 in p["name"] for p in restaurants):
-                sub = {"intent": "search_add", "target": _cleaned2}
-            else:
-                sub = _plan_sub_intent(text, state, restaurants)
+        _done_pat = _re3.compile(r'(生成行程|生成规划|好了生成|可以(了|生成)|好了.{0,4}(吧|～|！|!|$)|行程生成|开始生成)')
+        if _done_pat.search(text):
+            sub = {"intent": "done"}
+        # 预检：明确"加入/添加"动作 → search_add
+        else:
+            _add_pat2 = _re3.compile(
+                r'(加入|加进|添加|把.{1,10}加|我要.{1,10}(规划|行程)|我想加|帮我加|也加一下|加上).{0,6}(规划|行程|里|进来|上去)?'
+            )
+            if _add_pat2.search(text):
+                _cleaned2 = _re3.sub(r'(帮我|把|将|加入规划|加进规划|加入行程|加进行程|加入|添加|加进来|加上|我要|我想|也|规划|行程)', '', text).strip()
+                if _cleaned2 and not any(p["name"] in _cleaned2 or _cleaned2 in p["name"] for p in restaurants):
+                    sub = {"intent": "search_add", "target": _cleaned2}
+                else:
+                    sub = _plan_sub_intent(text, state, restaurants)
         else:
             sub = _plan_sub_intent(text, state, restaurants)
         intent = sub.get("intent")
@@ -1958,12 +1967,27 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
             threading.Thread(target=_q, daemon=True).start()
             return
 
+        if intent == "done":
+            # 用 selection 里已存的餐厅（含 search_add 加入的）
+            sel = plan_get(user_id, "selection") or {}
+            selected_restaurants = sel.get("restaurants", [])
+            plan_set(user_id, "state", "generating")
+            _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selected_restaurants,
+                                       city, days, preference, transport_mode)
+            return
+
         if intent in ("skip", "select"):
             if intent == "skip":
                 selected_restaurants = []
             else:
                 indices = sub.get("indices", [])
                 selected_restaurants = [restaurants[i] for i in indices if i < len(restaurants)]
+                # 合并 search_add 加入的餐厅
+                sel = plan_get(user_id, "selection") or {}
+                added = sel.get("restaurants", [])
+                for p in added:
+                    if not any(r["name"] == p["name"] for r in selected_restaurants):
+                        selected_restaurants.append(p)
             plan_set(user_id, "state", "generating")
             _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selected_restaurants,
                                        city, days, preference, transport_mode)
