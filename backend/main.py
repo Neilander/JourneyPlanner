@@ -1316,6 +1316,7 @@ def plan_clear(user_id: str):
     for field in ("state", "meta", "attractions", "restaurants", "selection", "bundles"):
         kv_set(f"plan_{field}:{user_id}", "")
     kv_set(f"plan_attrpage:{user_id}", "0")
+    kv_set(f"plan_shown_attractions:{user_id}", "[]")
 
 def search_pois(city: str, keywords: str, poi_type: str = "", limit: int = 8) -> list[dict]:
     """高德 POI 搜索，返回标准化列表。poi_type 为空则不限类型（适合按名称精确查找）"""
@@ -1613,20 +1614,23 @@ _ATTRACTION_BUCKETS = [
     ("网红",   ""),         # 网红打卡（不限类型）
 ]
 
-def _fetch_attractions_multi(city: str, preference: str, page: int = 0) -> list[dict]:
-    """并发搜多个类别，去重合并，返回最多 8 条。page 用于换一批（高德 page 从1开始）"""
-    amap_page = page + 1
+def _fetch_attractions_multi(city: str, preference: str, exclude_names: set = None) -> list[dict]:
+    """并发搜多个类别，去重合并，排除已展示过的，返回最多 8 条"""
+    exclude = exclude_names or set()
     if preference:
-        buckets = [(preference, ""), ("景区", "110000"), ("博物馆", "141200")]
+        buckets = [(preference, ""), ("景区", "110000"), ("博物馆", "141200"), ("古迹", "110202")]
     else:
         buckets = _ATTRACTION_BUCKETS
 
+    # 已展示过太多时尝试第2页
+    amap_page = 2 if len(exclude) >= 8 else 1
+
     results: list[dict] = []
-    seen: set[str] = set()
+    seen: set[str] = set(exclude)
 
     def _fetch(kw, ptype):
         params = {"key": AMAP_WEB_KEY, "city": city, "keywords": kw,
-                  "offset": 5, "page": amap_page, "extensions": "base"}
+                  "offset": 10, "page": amap_page, "extensions": "base"}
         if ptype:
             params["types"] = ptype
         try:
@@ -1660,11 +1664,22 @@ def _fetch_attractions_multi(city: str, preference: str, page: int = 0) -> list[
 
 
 def _show_attractions(open_kfid, user_id, city, preference, page=0):
-    """搜景点并展示，支持翻页（换一批）"""
-    attractions = _fetch_attractions_multi(city, preference, page)
+    """搜景点并展示，换一批时排除已展示过的"""
+    # 读取已展示名称
+    shown_raw = kv_get(f"plan_shown_attractions:{user_id}") or "[]"
+    try:
+        shown_names: set = set(json.loads(shown_raw))
+    except Exception:
+        shown_names = set()
+
+    attractions = _fetch_attractions_multi(city, preference, shown_names)
     if not attractions:
         send_text(open_kfid, user_id, f"没找到更多{city}景点了，换个关键词试试？")
         return
+    # 记录已展示名称，供下次换一批排除
+    shown_names.update(p["name"] for p in attractions)
+    kv_set(f"plan_shown_attractions:{user_id}", json.dumps(list(shown_names), ensure_ascii=False))
+
     plan_set(user_id, "attractions", attractions)
     plan_set(user_id, "state", "selecting_attractions")
     reply = (f"📍 {city} 景点推荐（回复编号或名称，可多选）：\n\n"
@@ -1762,11 +1777,8 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
 
         if intent == "refresh":
             pref = sub.get("preference", preference)
-            cur_page = int(kv_get(f"plan_attrpage:{user_id}") or "0")
-            next_page = cur_page + 1
-            kv_set(f"plan_attrpage:{user_id}", str(next_page))
             send_text(open_kfid, user_id, "换一批景点，稍等～")
-            threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, pref, next_page), daemon=True).start()
+            threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, pref), daemon=True).start()
             return
 
         if intent in ("query_intro", "query_realtime"):
