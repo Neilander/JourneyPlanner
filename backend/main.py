@@ -1519,6 +1519,7 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             f"用户正在从以下景点列表做选择：\n{poi_list_str}\n\n"
             "用户可能用编号、名称或自然语言表达选择；语音输入可能有矛盾（如'要1不对要3'），"
             "请自动去除矛盾，只保留最终意图。\n"
+            "cancel 仅在用户明确说"不玩了""取消""算了不规划了"等时触发，不要把抱怨/疑问识别为 cancel。\n"
             "query_intro：想了解景点的介绍/特色/是什么（如'这是什么地方''有什么好玩的'）\n"
             "query_realtime：想查景点实时状态（如'人多吗''开放吗''现在怎么样'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
@@ -1527,11 +1528,13 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             '{"intent":"query_realtime","target":"景点名"}    ← 想查实时情况\n'
             '{"intent":"refresh","preference":""}             ← 换一批景点\n'
             '{"intent":"back"}                                ← 返回交通方式选择\n'
-            '{"intent":"cancel"}                              ← 取消规划'
+            '{"intent":"cancel"}                              ← 明确取消规划\n'
+            '{"intent":"other","reply":"..."}                 ← 抱怨/疑问/无法识别，reply填回复内容'
         ),
         "selecting_restaurants": (
             f"用户正在从以下餐厅列表做选择：\n{poi_list_str}\n\n"
             "用户可能用编号、名称或自然语言；语音矛盾自动去除，只保留最终意图。\n"
+            "cancel 仅在用户明确说"不吃了""取消""算了"等时触发，不要把抱怨/疑问识别为 cancel。\n"
             "query_intro：想了解餐厅的介绍/特色/口味（如'这家什么风格''好不好吃'）\n"
             "query_realtime：想查实时情况（如'现在排队吗''今天几点关'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
@@ -1541,7 +1544,8 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             '{"intent":"query_realtime","target":"餐厅名"}    ← 想查实时情况\n'
             '{"intent":"refresh","preference":""}             ← 换一批餐厅\n'
             '{"intent":"back"}                                ← 返回景点选择\n'
-            '{"intent":"cancel"}                              ← 取消规划'
+            '{"intent":"cancel"}                              ← 明确取消规划\n'
+            '{"intent":"other","reply":"..."}                 ← 抱怨/疑问/无法识别，reply填回复内容'
         ),
     }
 
@@ -1579,8 +1583,14 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
 
 def _show_attractions(open_kfid, user_id, city, preference, page=0):
     """搜景点并展示，支持翻页（换一批）"""
-    keywords = preference or "热门景点"
+    keywords = preference or "景区"
     attractions = search_pois(city, keywords, "110000", limit=8)
+    # 结果太少时用备用关键词补充
+    if len(attractions) < 3:
+        extra = search_pois(city, "公园", "110000", limit=8)
+        seen = {p["name"] for p in attractions}
+        attractions += [p for p in extra if p["name"] not in seen]
+        attractions = attractions[:8]
     if not attractions:
         send_text(open_kfid, user_id, f"没找到更多{city}景点了，换个关键词试试？")
         return
@@ -1594,7 +1604,7 @@ def _show_attractions(open_kfid, user_id, city, preference, page=0):
 
 def _show_restaurants(open_kfid, user_id, city, preference):
     """搜餐厅并展示"""
-    rest_keywords = f"{preference}美食" if preference else "特色餐厅"
+    rest_keywords = f"{preference}餐厅" if preference else "餐厅"
     restaurants = search_pois(city, rest_keywords, "050000", limit=6)
     if not restaurants:
         return []
@@ -1642,6 +1652,11 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
         if intent == "cancel":
             plan_clear(user_id)
             send_text(open_kfid, user_id, "已取消行程规划，随时可以重新开始～")
+            return
+
+        if intent == "other":
+            reply = sub.get("reply") or "没太明白～可以直接发编号选景点，或说「换一批」「返回」"
+            send_text(open_kfid, user_id, reply)
             return
 
         if intent == "back":
@@ -1702,6 +1717,11 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
         if intent == "cancel":
             plan_clear(user_id)
             send_text(open_kfid, user_id, "已取消行程规划，随时可以重新开始～")
+            return
+
+        if intent == "other":
+            reply = sub.get("reply") or "没太明白～可以发编号选餐厅，或说「换一批」「跳过」「返回」"
+            send_text(open_kfid, user_id, reply)
             return
 
         if intent == "back":
