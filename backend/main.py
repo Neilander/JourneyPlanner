@@ -1732,7 +1732,22 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
     # ── 景点选择 ──────────────────────────────────────────────────────────────
     if state == "selecting_attractions":
         attractions = plan_get(user_id, "attractions") or []
-        sub = _plan_sub_intent(text, state, attractions)
+
+        # 预检：含"加入/添加…规划/行程"明确动作 → 直接 search_add，不走 DeepSeek
+        import re as _re2
+        _add_pattern = _re2.compile(
+            r'(加入|加进|添加|把.{1,10}加|我要.{1,10}规划|我想加|帮我加|也加一下|加上).{0,6}(规划|行程|里|进来|上去)?'
+        )
+        _precheck_add = _add_pattern.search(text)
+        if _precheck_add:
+            # 提取目标：去掉动词前缀和后缀
+            _cleaned = _re2.sub(r'(帮我|把|将|加入规划|加进规划|加入行程|加进行程|加入|添加|加进来|加上|我要|我想|也|规划|行程)', '', text).strip()
+            if _cleaned and not any(p["name"] in _cleaned or _cleaned in p["name"] for p in attractions):
+                sub = {"intent": "search_add", "target": _cleaned}
+            else:
+                sub = _plan_sub_intent(text, state, attractions)
+        else:
+            sub = _plan_sub_intent(text, state, attractions)
         intent = sub.get("intent")
 
         if intent == "cancel":
@@ -1861,7 +1876,20 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
         restaurants = plan_get(user_id, "restaurants") or []
         selection   = plan_get(user_id, "selection") or {}
         selected_attractions = selection.get("attractions", [])
-        sub    = _plan_sub_intent(text, state, restaurants)
+
+        # 预检：明确"加入/添加"动作 → search_add
+        import re as _re3
+        _add_pat2 = _re3.compile(
+            r'(加入|加进|添加|把.{1,10}加|我要.{1,10}(规划|行程)|我想加|帮我加|也加一下|加上).{0,6}(规划|行程|里|进来|上去)?'
+        )
+        if _add_pat2.search(text):
+            _cleaned2 = _re3.sub(r'(帮我|把|将|加入规划|加进规划|加入行程|加进行程|加入|添加|加进来|加上|我要|我想|也|规划|行程)', '', text).strip()
+            if _cleaned2 and not any(p["name"] in _cleaned2 or _cleaned2 in p["name"] for p in restaurants):
+                sub = {"intent": "search_add", "target": _cleaned2}
+            else:
+                sub = _plan_sub_intent(text, state, restaurants)
+        else:
+            sub = _plan_sub_intent(text, state, restaurants)
         intent = sub.get("intent")
 
         if intent == "cancel":
