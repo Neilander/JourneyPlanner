@@ -1316,14 +1316,17 @@ def plan_clear(user_id: str):
     for field in ("state", "meta", "attractions", "restaurants", "selection", "bundles"):
         kv_set(f"plan_{field}:{user_id}", "")
 
-def search_pois(city: str, keywords: str, poi_type: str, limit: int = 8) -> list[dict]:
-    """高德 POI 搜索，返回标准化列表。poi_type: 110000=景点 050000=餐饮"""
+def search_pois(city: str, keywords: str, poi_type: str = "", limit: int = 8) -> list[dict]:
+    """高德 POI 搜索，返回标准化列表。poi_type 为空则不限类型（适合按名称精确查找）"""
+    params = {
+        "key": AMAP_WEB_KEY, "city": city,
+        "keywords": keywords,
+        "offset": limit, "page": 1, "extensions": "base",
+    }
+    if poi_type:
+        params["types"] = poi_type
     try:
-        r = requests.get(AMAP_POI_URL, params={
-            "key": AMAP_WEB_KEY, "city": city,
-            "keywords": keywords, "types": poi_type,
-            "offset": limit, "page": 1, "extensions": "base",
-        }, timeout=8).json()
+        r = requests.get(AMAP_POI_URL, params=params, timeout=8).json()
         pois = []
         for p in r.get("pois", []):
             loc = p.get("location", "")
@@ -1692,9 +1695,7 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
                 return
             send_text(open_kfid, user_id, f"帮你搜一下「{target}」，稍等～")
             def _search_and_add(tgt=target):
-                results = search_pois(city, tgt, "110000", limit=1)
-                if not results:
-                    results = search_pois(city, tgt, "050000", limit=1)
+                results = search_pois(city, tgt, "", limit=1)  # 不限类型，按名称精确找
                 if not results:
                     send_text(open_kfid, user_id, f"没找到「{tgt}」，可以换个名字再试，或从列表里选～")
                     return
@@ -1748,7 +1749,36 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
             if not indices:
                 send_text(open_kfid, user_id, "没看清你选了哪些～发编号（如「1 3」）或景点名都行")
                 return
-            selected_attractions = [attractions[i] for i in indices if i < len(attractions)]
+            selected_pois = [attractions[i] for i in indices if i < len(attractions)]
+            # Python 层保护：如果选中的 POI 名称都没出现在用户文本里，且用户文本包含非数字内容，
+            # 说明 DeepSeek 猜错了，转为 search_add
+            import re as _re
+            text_no_num = _re.sub(r'[\d\s，、和跟还有]', '', text)
+            selected_names_in_text = any(p["name"] in text or any(c in text for c in p["name"] if len(c) > 1)
+                                         for p in selected_pois)
+            if text_no_num and not selected_names_in_text and len(text_no_num) >= 2:
+                # 提取用户可能想要的景点名（去掉动词前缀）
+                cleaned = _re.sub(r'^(帮我|把|将|加|添加|加入|规划|我要|我想|我|去|也)', '', text_no_num)
+                cleaned = _re.sub(r'(加入规划|加到规划|规划进去|加进来|也加上)$', '', cleaned).strip()
+                if cleaned:
+                    send_text(open_kfid, user_id, f"帮你搜一下「{cleaned}」，稍等～")
+                    def _search_and_add_guard(tgt=cleaned):
+                        results = search_pois(city, tgt, "", limit=1)
+                        if not results:
+                            send_text(open_kfid, user_id, f"没找到「{tgt}」，可以换个名字，或从列表里选编号～")
+                            return
+                        poi = results[0]
+                        sel = plan_get(user_id, "selection") or {}
+                        already = sel.get("attractions", [])
+                        if not any(p["name"] == poi["name"] for p in already):
+                            already.append(poi)
+                        plan_set(user_id, "selection", {"attractions": already, "restaurants": []})
+                        names = "、".join(p["name"] for p in already)
+                        send_text(open_kfid, user_id, f"已加入：{poi['name']} ✅\n当前已选：{names}\n\n继续选景点，或发「好了去选餐厅」")
+                    threading.Thread(target=_search_and_add_guard, daemon=True).start()
+                    return
+
+            selected_attractions = selected_pois
             plan_set(user_id, "selection", {"attractions": selected_attractions, "restaurants": []})
             names = "、".join(p["name"] for p in selected_attractions)
             send_text(open_kfid, user_id, f"选好了：{names} ✅\n\n帮你找几家餐厅，稍等～ 🍜")
@@ -1798,9 +1828,7 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
                 return
             send_text(open_kfid, user_id, f"帮你搜一下「{target}」，稍等～")
             def _search_rest(tgt=target):
-                results = search_pois(city, tgt, "050000", limit=1)
-                if not results:
-                    results = search_pois(city, tgt, "110000", limit=1)
+                results = search_pois(city, tgt, "", limit=1)  # 不限类型，按名称精确找
                 if not results:
                     send_text(open_kfid, user_id, f"没找到「{tgt}」，可以换个名字再试，或从列表里选～")
                     return
