@@ -1529,11 +1529,16 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             f"用户正在从以下景点列表做选择：\n{poi_list_str}\n\n"
             "用户可能用编号、名称或自然语言表达选择；语音输入可能有矛盾（如'要1不对要3'），"
             "请自动去除矛盾，只保留最终意图。\n"
-            "cancel 仅在用户明确说"不玩了""取消""算了不规划了"等时触发，不要把抱怨/疑问识别为 cancel。\n"
+            "重要规则：\n"
+            "1. 只有当用户说的名称/编号与列表中某项明确匹配时，才返回 select。\n"
+            "2. 如果用户提到的景点名称不在列表中（如'武侯祠''宽窄巷子'等），返回 search_add，不要猜测或选错误的列表项。\n"
+            "3. cancel 仅在用户明确说"不玩了""取消""算了不规划了"等时触发。\n"
             "query_intro：想了解景点的介绍/特色/是什么（如'这是什么地方''有什么好玩的'）\n"
             "query_realtime：想查景点实时状态（如'人多吗''开放吗''现在怎么样'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
-            '{"intent":"select","indices":[1,3]}              ← 选景点\n'
+            '{"intent":"select","indices":[1,3]}              ← 选列表中的景点（名称或编号能确认匹配）\n'
+            '{"intent":"search_add","target":"武侯祠"}        ← 想添加列表中没有的景点\n'
+            '{"intent":"done"}                                ← 景点选好了，去选餐厅（如"好了""去选餐厅""下一步"）\n'
             '{"intent":"query_intro","target":"景点名"}       ← 想了解景点介绍\n'
             '{"intent":"query_realtime","target":"景点名"}    ← 想查实时情况\n'
             '{"intent":"refresh","preference":""}             ← 换一批景点\n'
@@ -1544,11 +1549,15 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
         "selecting_restaurants": (
             f"用户正在从以下餐厅列表做选择：\n{poi_list_str}\n\n"
             "用户可能用编号、名称或自然语言；语音矛盾自动去除，只保留最终意图。\n"
-            "cancel 仅在用户明确说"不吃了""取消""算了"等时触发，不要把抱怨/疑问识别为 cancel。\n"
+            "重要规则：\n"
+            "1. 只有当用户说的名称/编号与列表中某项明确匹配时，才返回 select。\n"
+            "2. 如果用户提到的餐厅名称不在列表中，返回 search_add，不要猜测选错误项。\n"
+            "3. cancel 仅在用户明确说"不吃了""取消""算了"等时触发。\n"
             "query_intro：想了解餐厅的介绍/特色/口味（如'这家什么风格''好不好吃'）\n"
             "query_realtime：想查实时情况（如'现在排队吗''今天几点关'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
-            '{"intent":"select","indices":[2,4]}              ← 选餐厅\n'
+            '{"intent":"select","indices":[2,4]}              ← 选列表中的餐厅（名称或编号能确认匹配）\n'
+            '{"intent":"search_add","target":"餐厅名"}        ← 想添加列表中没有的餐厅\n'
             '{"intent":"skip"}                                ← 跳过餐厅直接生成行程\n'
             '{"intent":"query_intro","target":"餐厅名"}       ← 想了解餐厅介绍\n'
             '{"intent":"query_realtime","target":"餐厅名"}    ← 想查实时情况\n'
@@ -1676,6 +1685,31 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
                 f"1️⃣ 公共交通　2️⃣ 自驾　3️⃣ 两种都参考\n\n回复 1、2 或 3")
             return
 
+        if intent == "search_add":
+            target = sub.get("target", "")
+            if not target:
+                send_text(open_kfid, user_id, "没听清你想加哪个景点，再说一次？")
+                return
+            send_text(open_kfid, user_id, f"帮你搜一下「{target}」，稍等～")
+            def _search_and_add(tgt=target):
+                results = search_pois(city, tgt, "110000", limit=1)
+                if not results:
+                    results = search_pois(city, tgt, "050000", limit=1)
+                if not results:
+                    send_text(open_kfid, user_id, f"没找到「{tgt}」，可以换个名字再试，或从列表里选～")
+                    return
+                poi = results[0]
+                # 加入已选列表并继续
+                sel = plan_get(user_id, "selection") or {}
+                already = sel.get("attractions", [])
+                if not any(p["name"] == poi["name"] for p in already):
+                    already.append(poi)
+                plan_set(user_id, "selection", {"attractions": already, "restaurants": []})
+                names = "、".join(p["name"] for p in already)
+                send_text(open_kfid, user_id, f"已加入：{poi['name']} ✅\n当前已选：{names}\n\n继续选景点，或发「好了去选餐厅」「换一批」")
+            threading.Thread(target=_search_and_add, daemon=True).start()
+            return
+
         if intent == "refresh":
             pref = sub.get("preference", preference)
             send_text(open_kfid, user_id, "换一批景点，稍等～")
@@ -1695,6 +1729,18 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
                     reply = query_attraction_status(target, city)
                     send_text(open_kfid, user_id, reply + "\n\n继续从上面的列表选景点，或发「换一批」")
             threading.Thread(target=_q, daemon=True).start()
+            return
+
+        if intent == "done":
+            # 用 search_add 加入的景点已在 selection 里，直接进入餐厅
+            sel = plan_get(user_id, "selection") or {}
+            selected_attractions = sel.get("attractions", [])
+            if not selected_attractions:
+                send_text(open_kfid, user_id, "还没选景点～先发编号或说景点名加进来～")
+                return
+            names = "、".join(p["name"] for p in selected_attractions)
+            send_text(open_kfid, user_id, f"选好了：{names} ✅\n\n帮你找几家餐厅，稍等～ 🍜")
+            threading.Thread(target=_show_restaurants, args=(open_kfid, user_id, city, preference), daemon=True).start()
             return
 
         if intent == "select":
@@ -1743,6 +1789,32 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
                 send_text(open_kfid, user_id, reply)
             else:
                 threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, preference), daemon=True).start()
+            return
+
+        if intent == "search_add":
+            target = sub.get("target", "")
+            if not target:
+                send_text(open_kfid, user_id, "没听清你想加哪家餐厅，再说一次？")
+                return
+            send_text(open_kfid, user_id, f"帮你搜一下「{target}」，稍等～")
+            def _search_rest(tgt=target):
+                results = search_pois(city, tgt, "050000", limit=1)
+                if not results:
+                    results = search_pois(city, tgt, "110000", limit=1)
+                if not results:
+                    send_text(open_kfid, user_id, f"没找到「{tgt}」，可以换个名字再试，或从列表里选～")
+                    return
+                poi = results[0]
+                # 获取当前已选餐厅并追加
+                sel = plan_get(user_id, "selection") or {}
+                curr_rests = sel.get("restaurants", [])
+                if not any(p["name"] == poi["name"] for p in curr_rests):
+                    curr_rests.append(poi)
+                sel["restaurants"] = curr_rests
+                plan_set(user_id, "selection", sel)
+                names = "、".join(p["name"] for p in curr_rests)
+                send_text(open_kfid, user_id, f"已加入：{poi['name']} ✅\n当前已选餐厅：{names}\n\n继续选餐厅，或发「好了生成行程」「跳过」")
+            threading.Thread(target=_search_rest, daemon=True).start()
             return
 
         if intent == "refresh":
