@@ -82,6 +82,112 @@ function toMinutes(km: number) {
   return Math.round(km / 5 * 60)
 }
 
+// ── 行程文本解析 ─────────────────────────────────────────────────
+type TripBlock =
+  | { type: 'plan_title'; text: string }
+  | { type: 'plan_style'; text: string }
+  | { type: 'day_header'; day: number; title: string }
+  | { type: 'time_block'; emoji: string; label: string; content: string }
+  | { type: 'transport'; text: string }
+  | { type: 'tip'; text: string }
+  | { type: 'bullet'; text: string }
+  | { type: 'text'; text: string }
+
+function stripMd(s: string) {
+  return s.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').trim()
+}
+
+function parseBundle(raw: string): TripBlock[][] {
+  const plans: TripBlock[][] = []
+  let cur: TripBlock[] = []
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+    if (/^---+$/.test(line)) { if (cur.length) { plans.push(cur); cur = [] } ; continue }
+    const planM = line.match(/^【(方案.+?)】$/)
+    if (planM) { cur.push({ type: 'plan_title', text: planM[1] }); continue }
+    if (cur.length && cur[cur.length - 1].type === 'plan_title') { cur.push({ type: 'plan_style', text: stripMd(line) }); continue }
+    const dayM = line.match(/^\*?\*?Day\s*(\d+)[：:]\s*(.*?)\*?\*?$/)
+    if (dayM) { cur.push({ type: 'day_header', day: +dayM[1], title: stripMd(dayM[2]) }); continue }
+    const timeM = line.match(/^-\s*\*\*?(上午|下午|晚上|早上|中午)(.*?)\*?\*?$/)
+    if (timeM) {
+      const em: Record<string, string> = { 上午:'🌅', 早上:'🌅', 中午:'☀️', 下午:'🌤️', 晚上:'🌙' }
+      cur.push({ type: 'time_block', emoji: em[timeM[1]] || '⏰', label: timeM[1], content: stripMd(timeM[2]) }); continue
+    }
+    const transM = line.match(/^[\s-]*\*?交通[：:]\s*(.*?)\*?$/)
+    if (transM) { cur.push({ type: 'transport', text: stripMd(transM[1]) }); continue }
+    const tipM = line.match(/^[\s-]*\*?(建议|注意|Tips?|温馨提示)[：:]\s*(.*?)\*?$/i)
+    if (tipM) { cur.push({ type: 'tip', text: stripMd(tipM[2]) }); continue }
+    if (line.startsWith('-') || line.startsWith('•') || line.startsWith('*')) {
+      const c = stripMd(line.slice(1).trim()); if (c) cur.push({ type: 'bullet', text: c }); continue
+    }
+    cur.push({ type: 'text', text: stripMd(line) })
+  }
+  if (cur.length) plans.push(cur)
+  return plans.filter(p => p.length > 0)
+}
+
+function TripBlockView({ block }: { block: TripBlock }) {
+  const ink = 'var(--ink)', inkMid = 'var(--ink-mid)', accent = 'var(--accent)'
+  switch (block.type) {
+    case 'plan_title':
+      return <div className="flex items-center gap-2 mt-2 mb-1"><span className="text-xl">🗺️</span><span className="text-base font-bold" style={{ color: accent }}>{block.text}</span></div>
+    case 'plan_style':
+      return <p className="text-xs italic mb-3 leading-relaxed" style={{ color: inkMid }}>{block.text}</p>
+    case 'day_header':
+      return (
+        <div className="flex items-center gap-3 mt-5 mb-2">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-xs shrink-0"
+               style={{ background: 'linear-gradient(135deg,#f59e0b,#ef4444)' }}>D{block.day}</div>
+          <span className="font-bold text-sm" style={{ color: ink }}>{block.title}</span>
+        </div>
+      )
+    case 'time_block':
+      return (
+        <div className="flex items-start gap-2 mt-3 mb-0.5">
+          <span className="text-sm mt-0.5">{block.emoji}</span>
+          <div><span className="text-xs font-semibold" style={{ color: '#d97706' }}>{block.label}</span>
+            {block.content && <span className="ml-1 text-xs" style={{ color: ink }}>{block.content}</span>}</div>
+        </div>
+      )
+    case 'transport':
+      return <div className="flex items-start gap-1.5 ml-4 mt-1 text-xs rounded px-2 py-0.5" style={{ color:'#2563eb', background:'#eff6ff' }}><span className="shrink-0">🚌</span><span className="leading-relaxed">{block.text}</span></div>
+    case 'tip':
+      return <div className="flex items-start gap-1.5 ml-4 mt-1 text-xs rounded px-2 py-0.5" style={{ color:'#15803d', background:'#f0fdf4' }}><span className="shrink-0">💡</span><span className="leading-relaxed">{block.text}</span></div>
+    case 'bullet':
+      return <div className="flex items-start gap-1.5 ml-4 mt-1 text-xs" style={{ color: ink }}><span className="shrink-0 font-bold" style={{ color:'#f59e0b' }}>›</span><span className="leading-relaxed">{block.text}</span></div>
+    case 'text':
+      return <p className="text-xs ml-1 mt-1 leading-relaxed" style={{ color: inkMid }}>{block.text}</p>
+    default: return null
+  }
+}
+
+function TripDetailBody({ bundleText }: { bundleText: string }) {
+  const [activeTab, setActiveTab] = useState(0)
+  const plans = parseBundle(bundleText)
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {plans.length > 1 && (
+        <div className="flex gap-2 px-4 pt-3">
+          {plans.map((_, i) => (
+            <button key={i} onClick={() => setActiveTab(i)}
+              className="flex-1 py-1.5 rounded-xl text-xs font-medium transition-all"
+              style={{ background: activeTab===i ? 'var(--accent)' : 'var(--surface)', color: activeTab===i ? '#fff' : 'var(--ink-mid)', border: activeTab===i ? 'none' : '1px solid var(--cream)' }}>
+              方案 {i+1}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="px-4 py-3 pb-12">
+        <div className="rounded-2xl px-4 py-3" style={{ background: 'var(--surface)', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
+          {(plans[activeTab] || []).map((b, i) => <TripBlockView key={i} block={b} />)}
+        </div>
+        <p className="text-center text-xs mt-4" style={{ color: 'var(--ink-mid)' }}>🧭 由旅途向导生成 · 仅供参考</p>
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const mapRef = useRef<any>(null)
   const AMapRef = useRef<any>(null)
@@ -197,6 +303,15 @@ export default function Home() {
       // 最多轮询10次（5分钟）
       setTimeout(() => clearInterval(timer), 300000)
     })
+
+    // 若 URL 带 trip_id，自动拉取并展示行程详情
+    const tripId = new URLSearchParams(window.location.search).get('trip_id')
+    if (tripId) {
+      fetch(`${API_BASE}/api/trips/${tripId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setTripDetail(data) })
+        .catch(() => {})
+    }
   }, [])
 
   // 地图初始化
@@ -324,6 +439,20 @@ export default function Home() {
       setTrips(data.trips || [])
     } catch {}
     setTripsLoading(false)
+  }
+
+  // 行程详情弹窗
+  const [tripDetail, setTripDetail] = useState<typeof trips[0] | null>(null)
+
+  const openTripDetail = async (tripId: number) => {
+    // 先从已加载的 trips 里找
+    const cached = trips.find(t => t.id === tripId)
+    if (cached) { setTripDetail(cached); return }
+    // 否则按 ID 拉取
+    try {
+      const data = await fetch(`${API_BASE}/api/trips/${tripId}`).then(r => r.json())
+      setTripDetail(data)
+    } catch {}
   }
 
   const removeHotel = async (hotelId: string) => {
@@ -892,7 +1021,13 @@ export default function Home() {
                     </button>
                     {isExpanded && (
                       <div className="px-4 pb-4">
-                        <pre className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--ink)', fontFamily: 'inherit' }}>{trip.bundle_text}</pre>
+                        <button
+                          onClick={() => { openTripDetail(trip.id); setShowTrips(false) }}
+                          className="w-full py-2 rounded-xl text-sm font-medium"
+                          style={{ background: 'var(--accent)', color: '#fff' }}
+                        >
+                          查看完整行程 →
+                        </button>
                       </div>
                     )}
                   </div>
@@ -900,6 +1035,33 @@ export default function Home() {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Trip detail modal */}
+      {tripDetail && (
+        <div className="absolute inset-0 z-50 flex flex-col" style={{ background: '#fffbeb', fontFamily: 'inherit' }}>
+          {/* 顶部 header */}
+          <div className="px-4 pt-10 pb-5 text-white shrink-0"
+               style={{ background: 'linear-gradient(135deg,#f59e0b 0%,#ef4444 100%)' }}>
+            <button
+              onClick={() => setTripDetail(null)}
+              className="flex items-center gap-1 text-xs mb-3 opacity-80"
+              style={{ color: '#fff' }}
+            >
+              ← 返回
+            </button>
+            <div className="text-xs mb-1 opacity-75">
+              {new Date(tripDetail.created_at + 'Z').toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} 生成
+            </div>
+            <h1 className="text-xl font-bold">📍 {tripDetail.city} {tripDetail.days}日行程</h1>
+            {tripDetail.preference && (
+              <div className="mt-1 text-xs opacity-85">偏好：{tripDetail.preference}</div>
+            )}
+          </div>
+
+          {/* 方案 Tab + 内容 */}
+          <TripDetailBody bundleText={tripDetail.bundle_text} />
         </div>
       )}
 

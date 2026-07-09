@@ -2068,7 +2068,7 @@ def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selecte
             print(f"[trips] save error: {e}")
         # 发链接，点击在网页端查看漂亮排版
         if trip_id:
-            trip_url = f"{H5_URL}/trip?id={trip_id}"
+            trip_url = f"{H5_URL}?uid={user_id}&trip_id={trip_id}"
             send_text(open_kfid, user_id,
                 f"🗺️ {city} {days}日行程方案生成好啦！\n\n"
                 f"点击查看完整行程 👇\n{trip_url}\n\n"
