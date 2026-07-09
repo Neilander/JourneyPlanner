@@ -983,7 +983,17 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
             handle_plan_selection(open_kfid, user_id, text)
             return
         if plan_state == "generating":
-            send_text(open_kfid, user_id, "行程正在生成中，稍等片刻～ ⏳")
+            # 检查生成是否超时（超过5分钟视为孤立任务，重置状态）
+            import time as _time
+            gen_start = float(kv_get(f"plan_gen_start:{user_id}") or "0")
+            if gen_start and (_time.time() - gen_start) > 300:
+                plan_set(user_id, "state", "idle")
+                kv_set(f"plan_gen_start:{user_id}", "")
+                send_text(open_kfid, user_id,
+                    "上次行程生成好像超时了 😅\n\n"
+                    "发「生成行程」可以重新开始，或者说「我的行程」找之前保存的～")
+            else:
+                send_text(open_kfid, user_id, "行程正在生成中，稍等片刻～ ⏳")
             return
 
     # ── 状态1：Onboarding（首次进入）────────────────────────────────────────
@@ -2083,12 +2093,15 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
 
 def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selected_restaurants,
                                 city, days, preference, transport_mode="both"):
+    import time as _time
+    kv_set(f"plan_gen_start:{user_id}", str(_time.time()))
     send_text(open_kfid, user_id, "正在生成行程方案，稍等 30 秒左右～ ⏳")
     def _gen():
         bundles_text = generate_bundles(selected_attractions, selected_restaurants,
                                         city, days, preference, transport_mode)
         plan_set(user_id, "bundles", bundles_text)
         plan_set(user_id, "state", "idle")
+        kv_set(f"plan_gen_start:{user_id}", "")  # 清除生成时间戳
         # 持久化到 trips 历史表，获取 trip_id 用于链接
         trip_id = None
         try:
@@ -2227,6 +2240,18 @@ _scheduler.add_job(run_daily_weather_push, "cron", hour=8, minute=0, id="daily_w
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 启动时清理所有孤立的 "generating" 状态（进程重启导致后台线程丢失）
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT key FROM kv WHERE key LIKE 'plan_state:%' AND value='generating'"
+            ).fetchall()
+            for row in rows:
+                conn.execute("UPDATE kv SET value='idle' WHERE key=?", (row["key"],))
+        if rows:
+            print(f"[startup] cleared {len(rows)} stale 'generating' states")
+    except Exception as e:
+        print(f"[startup] state cleanup error: {e}")
     _scheduler.start()
     print("[scheduler] started, next weather push at 08:00 Asia/Shanghai")
     yield
