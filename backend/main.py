@@ -1615,12 +1615,13 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             "1. 只有当用户说的名称/编号与列表中某项明确匹配时，才返回 select。\n"
             "2. 如果用户提到的景点名称不在列表中（如'武侯祠''宽窄巷子'等），返回 search_add，不要猜测或选错误的列表项。\n"
             '3. cancel 仅在用户明确说【不玩了】【取消】【算了不规划了】等时触发。\n'
+            "4. 用户提到餐厅/吃饭/火锅/美食等，说明景点已选完想进入餐厅步骤，返回 done。\n"
             "query_intro：想了解景点的介绍/特色/是什么（如'这是什么地方''有什么好玩的'）\n"
             "query_realtime：想查景点实时状态（如'人多吗''开放吗''现在怎么样'）\n"
             "只返回JSON（indices为1-based编号列表）：\n"
             '{"intent":"select","indices":[1,3]}              ← 选列表中的景点（名称或编号能确认匹配）\n'
             '{"intent":"search_add","target":"武侯祠"}        ← 想添加列表中没有的景点\n'
-            '{"intent":"done"}                                ← 景点选好了，去选餐厅（如"好了""去选餐厅""下一步"）\n'
+            '{"intent":"done"}                                ← 景点选好了，去选餐厅（如"好了""去选餐厅""下一步""餐厅""选个吃饭的""来个火锅店"）\n'
             '{"intent":"query_intro","target":"景点名"}       ← 想了解景点介绍\n'
             '{"intent":"query_realtime","target":"景点名"}    ← 想查实时情况\n'
             '{"intent":"refresh","preference":""}             ← 换一批景点\n'
@@ -1833,21 +1834,25 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
     if state == "selecting_attractions":
         attractions = plan_get(user_id, "attractions") or []
 
-        # 预检：含"加入/添加…规划/行程"明确动作 → 直接 search_add，不走 DeepSeek
         import re as _re2
-        _add_pattern = _re2.compile(
-            r'(加入|加进|添加|把.{1,10}加|我要.{1,10}规划|我想加|帮我加|也加一下|加上).{0,6}(规划|行程|里|进来|上去)?'
-        )
-        _precheck_add = _add_pattern.search(text)
-        if _precheck_add:
-            # 提取目标：去掉动词前缀和后缀
-            _cleaned = _re2.sub(r'(帮我|把|将|加入规划|加进规划|加入行程|加进行程|加入|添加|加进来|加上|我要|我想|也|规划|行程)', '', text).strip()
-            if _cleaned and not any(p["name"] in _cleaned or _cleaned in p["name"] for p in attractions):
-                sub = {"intent": "search_add", "target": _cleaned}
+        # 预检1：提到餐厅/吃饭/火锅等 → done（准备去选餐厅）
+        _food_pat = _re2.compile(r'(餐厅|吃饭|火锅|美食|饭馆|饭店|小吃|选餐|去吃|找吃的|吃点什么|吃什么)')
+        if _food_pat.search(text):
+            sub = {"intent": "done"}
+        # 预检2：含"加入/添加…规划/行程"明确动作 → search_add
+        else:
+            _add_pattern = _re2.compile(
+                r'(加入|加进|添加|把.{1,10}加|我要.{1,10}规划|我想加|帮我加|也加一下|加上).{0,6}(规划|行程|里|进来|上去)?'
+            )
+            _precheck_add = _add_pattern.search(text)
+            if _precheck_add:
+                _cleaned = _re2.sub(r'(帮我|把|将|加入规划|加进规划|加入行程|加进行程|加入|添加|加进来|加上|我要|我想|也|规划|行程)', '', text).strip()
+                if _cleaned and not any(p["name"] in _cleaned or _cleaned in p["name"] for p in attractions):
+                    sub = {"intent": "search_add", "target": _cleaned}
+                else:
+                    sub = _plan_sub_intent(text, state, attractions)
             else:
                 sub = _plan_sub_intent(text, state, attractions)
-        else:
-            sub = _plan_sub_intent(text, state, attractions)
         intent = sub.get("intent")
 
         if intent == "cancel":
