@@ -1794,6 +1794,10 @@ def _show_restaurants(open_kfid, user_id, city, preference):
     rest_keywords = f"{preference}餐厅" if preference else "餐厅"
     restaurants = search_pois(city, rest_keywords, "050000", limit=6)
     if not restaurants:
+        # 偏好词可能导致空结果，回退到通用搜索
+        restaurants = search_pois(city, "餐厅", "050000", limit=6)
+    if not restaurants:
+        send_text(open_kfid, user_id, "暂时没找到餐厅，可以发「跳过」直接生成行程，或稍后再试～")
         return []
     plan_set(user_id, "restaurants", restaurants)
     plan_set(user_id, "state", "selecting_restaurants")
@@ -2048,8 +2052,10 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
             return
 
         if intent == "refresh":
-            pref = sub.get("preference", preference)
-            send_text(open_kfid, user_id, "换一批餐厅，稍等～")
+            extra_pref = sub.get("preference", "")
+            pref = extra_pref if extra_pref else preference
+            hint = f"（偏好：{extra_pref}）" if extra_pref else ""
+            send_text(open_kfid, user_id, f"换一批餐厅{hint}，稍等～")
             threading.Thread(target=_show_restaurants, args=(open_kfid, user_id, city, pref), daemon=True).start()
             return
 
