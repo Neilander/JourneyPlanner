@@ -98,6 +98,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_trips_wecom ON trips(wecom_id);
         CREATE INDEX IF NOT EXISTS idx_usage_log ON usage_log(wecom_id, action, ts);
         """)
+    # 兼容旧数据库：补充 budget_text 列
+    try:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE trips ADD COLUMN budget_text TEXT DEFAULT ''")
+    except Exception:
+        pass  # 列已存在，忽略
 
 init_db()
 
@@ -1567,6 +1573,57 @@ def generate_bundles(selected_attractions: list[dict], selected_restaurants: lis
         print(f"[generate_bundles] error: {e}")
         return "行程生成失败，请稍后再试～"
 
+BUDGET_PROMPT = """你是旅行预算规划师。根据行程信息生成一份旅行费用估算。
+
+输出格式（严格按此，不要多余文字）：
+【预算估算】
+
+🚇 交通费：¥xxx–xxx
+（含往返大交通 + 市内交通，交通方式：{mode}）
+
+🏨 住宿费：¥xxx–xxx
+（{nights}晚，约¥xxx–xxx/晚，{pref_note}）
+
+🍜 餐饮费：¥xxx–xxx
+（约¥xxx–xxx/天，含已选餐厅）
+
+🎫 门票费：¥xxx–xxx
+（{ticket_detail}）
+
+🛍️ 购物/其他：¥xxx–xxx
+
+💰 合计参考：¥xxx–xxx
+
+💡 省钱提示：一句话实用建议。
+
+注意：用人民币金额，给合理区间，不要编造具体门票价格（写"约xx元"或"免费/需购票"）。"""
+
+def generate_budget(selected_attractions: list[dict], selected_restaurants: list[dict],
+                    city: str, days: int, preference: str, transport_mode: str = "both") -> str:
+    mode_label = {"transit": "公共交通", "driving": "自驾", "both": "公共交通+自驾"}.get(transport_mode, "公共交通")
+    attraction_list = "、".join(p["name"] for p in selected_attractions) if selected_attractions else "（未选景点）"
+    restaurant_list = "、".join(p["name"] for p in selected_restaurants) if selected_restaurants else "（未选餐厅）"
+    nights = max(days - 1, 1)
+    user_content = (
+        f"目的地：{city}，天数：{days}天{nights}晚，偏好：{preference or '无特殊偏好'}\n"
+        f"交通方式：{mode_label}\n"
+        f"已选景点：{attraction_list}\n"
+        f"已选餐厅：{restaurant_list}"
+    )
+    try:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+            json={"model": "deepseek-chat", "max_tokens": 400,
+                  "messages": [{"role": "system", "content": BUDGET_PROMPT},
+                                {"role": "user", "content": user_content}]},
+            timeout=15
+        ).json()
+        return r["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[generate_budget] error: {e}")
+        return ""
+
 def parse_selection(text: str, max_n: int) -> list[int]:
     """从用户输入里提取编号，返回 0-based 索引列表。支持"1 3 5"/"1、3、5"/"第一和第三"等"""
     nums = [int(x) for x in re.findall(r'\d+', text) if 1 <= int(x) <= max_n]
@@ -2108,8 +2165,16 @@ def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selecte
     kv_set(f"plan_gen_start:{user_id}", str(_time.time()))
     send_text(open_kfid, user_id, "正在生成行程方案，稍等 30 秒左右～ ⏳")
     def _gen():
-        bundles_text = generate_bundles(selected_attractions, selected_restaurants,
-                                        city, days, preference, transport_mode)
+        import concurrent.futures as _cf
+        # 并行生成行程 + 预算
+        with _cf.ThreadPoolExecutor(max_workers=2) as ex:
+            f_bundles = ex.submit(generate_bundles, selected_attractions, selected_restaurants,
+                                  city, days, preference, transport_mode)
+            f_budget  = ex.submit(generate_budget,  selected_attractions, selected_restaurants,
+                                  city, days, preference, transport_mode)
+            bundles_text = f_bundles.result()
+            budget_text  = f_budget.result()
+
         plan_set(user_id, "bundles", bundles_text)
         plan_set(user_id, "state", "idle")
         kv_set(f"plan_gen_start:{user_id}", "")  # 清除生成时间戳
@@ -2118,8 +2183,8 @@ def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selecte
         try:
             with get_db() as conn:
                 cur = conn.execute(
-                    "INSERT INTO trips (wecom_id, city, days, preference, bundle_text) VALUES (?,?,?,?,?)",
-                    (user_id, city, days, preference, bundles_text)
+                    "INSERT INTO trips (wecom_id, city, days, preference, bundle_text, budget_text) VALUES (?,?,?,?,?,?)",
+                    (user_id, city, days, preference, bundles_text, budget_text)
                 )
                 trip_id = cur.lastrowid
         except Exception as e:
@@ -2133,6 +2198,9 @@ def _trigger_bundle_generation(open_kfid, user_id, selected_attractions, selecte
                 f"行程包含 2 套方案，可在页面里切换～")
         else:
             send_text(open_kfid, user_id, bundles_text)
+        # 预算单独发一条
+        if budget_text:
+            send_text(open_kfid, user_id, budget_text)
     threading.Thread(target=_gen, daemon=True).start()
 
 CITY_BRIEF_PROMPT = """你是旅行助手，根据下面的天气数据和搜索摘要，为用户生成一段目的地城市简报。
@@ -3121,7 +3189,7 @@ async def user_trips(wecom_id: str):
 async def get_trip(trip_id: int):
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, city, days, preference, bundle_text, created_at FROM trips WHERE id=?",
+            "SELECT id, city, days, preference, bundle_text, budget_text, created_at FROM trips WHERE id=?",
             (trip_id,)
         ).fetchone()
     if not row:

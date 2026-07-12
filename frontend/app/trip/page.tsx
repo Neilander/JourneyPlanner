@@ -10,6 +10,7 @@ interface Trip {
   days: number
   preference: string
   bundle_text: string
+  budget_text: string
   created_at: string
 }
 
@@ -199,6 +200,7 @@ export default function TripPage() {
 
   const plans = parseBundle(trip.bundle_text)
   const date = new Date(trip.created_at).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
+  const budgetLines = (trip.budget_text || '').split('\n').map(l => l.trim()).filter(Boolean)
 
   return (
     <div className="min-h-screen" style={{ background: '#fffbeb', fontFamily: "'LXGW WenKai Screen', serif" }}>
@@ -242,6 +244,29 @@ export default function TripPage() {
             <BlockView key={i} block={block} />
           ))}
         </div>
+        {/* 预算卡片 */}
+        {budgetLines.length > 0 && (
+          <div className="mt-4 rounded-2xl px-4 py-4"
+               style={{ background: '#fff', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+            {budgetLines.map((line, i) => {
+              if (line.startsWith('【') && line.endsWith('】'))
+                return <div key={i} className="text-sm font-bold mb-3" style={{ color: '#b45309' }}>{line.slice(1,-1)}</div>
+              if (line.startsWith('💰'))
+                return <div key={i} className="mt-3 pt-3 text-sm font-bold" style={{ borderTop: '1px dashed #fde68a', color: '#92400e' }}>{line}</div>
+              if (line.startsWith('💡'))
+                return <div key={i} className="mt-3 text-xs rounded-lg px-3 py-2" style={{ background: '#f0fdf4', color: '#15803d' }}>{line}</div>
+              if (line.startsWith('（') || line.startsWith('('))
+                return <div key={i} className="text-xs ml-1 mb-1" style={{ color: '#9ca3af' }}>{line}</div>
+              if (line.match(/^[🚇🏨🍜🎫🛍️]/u))
+                return <div key={i} className="flex justify-between items-center mt-2 text-sm" style={{ color: '#374151' }}>
+                  <span>{line.split('：')[0]}</span>
+                  <span className="font-medium" style={{ color: '#d97706' }}>{line.split('：')[1]}</span>
+                </div>
+              return <div key={i} className="text-xs mt-1" style={{ color: '#6b7280' }}>{line}</div>
+            })}
+          </div>
+        )}
+
         <p className="text-center text-xs mt-6" style={{ color: '#9ca3af' }}>
           🧭 由旅途向导生成 · 仅供参考，请结合实际情况调整
         </p>

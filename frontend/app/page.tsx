@@ -162,7 +162,34 @@ function TripBlockView({ block }: { block: TripBlock }) {
   }
 }
 
-function TripDetailBody({ bundleText }: { bundleText: string }) {
+function BudgetView({ budgetText }: { budgetText: string }) {
+  const lines = (budgetText || '').split('\n').map(l => l.trim()).filter(Boolean)
+  if (!lines.length) return null
+  return (
+    <div className="mt-3 rounded-2xl px-4 py-3" style={{ background: 'var(--surface)', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
+      {lines.map((line, i) => {
+        if (line.startsWith('【') && line.endsWith('】'))
+          return <div key={i} className="text-xs font-bold mb-2" style={{ color: 'var(--accent)' }}>{line.slice(1,-1)}</div>
+        if (line.startsWith('💰'))
+          return <div key={i} className="mt-2 pt-2 text-xs font-bold" style={{ borderTop: '1px dashed var(--cream)', color: '#92400e' }}>{line}</div>
+        if (line.startsWith('💡'))
+          return <div key={i} className="mt-2 text-xs rounded-lg px-2 py-1.5" style={{ background: '#f0fdf4', color: '#15803d' }}>{line}</div>
+        if (line.startsWith('（') || line.startsWith('('))
+          return <div key={i} className="text-xs mb-1" style={{ color: 'var(--ink-mid)' }}>{line}</div>
+        if (line.match(/^[🚇🏨🍜🎫🛍️]/u)) {
+          const [label, val] = line.split('：')
+          return <div key={i} className="flex justify-between items-center mt-1.5 text-xs">
+            <span style={{ color: 'var(--ink)' }}>{label}</span>
+            <span className="font-medium" style={{ color: '#d97706' }}>{val}</span>
+          </div>
+        }
+        return <div key={i} className="text-xs mt-0.5" style={{ color: 'var(--ink-mid)' }}>{line}</div>
+      })}
+    </div>
+  )
+}
+
+function TripDetailBody({ bundleText, budgetText }: { bundleText: string; budgetText?: string }) {
   const [activeTab, setActiveTab] = useState(0)
   const plans = parseBundle(bundleText)
   return (
@@ -182,6 +209,7 @@ function TripDetailBody({ bundleText }: { bundleText: string }) {
         <div className="rounded-2xl px-4 py-3" style={{ background: 'var(--surface)', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
           {(plans[activeTab] || []).map((b, i) => <TripBlockView key={i} block={b} />)}
         </div>
+        {budgetText && <BudgetView budgetText={budgetText} />}
         <p className="text-center text-xs mt-4" style={{ color: 'var(--ink-mid)' }}>🧭 由旅途向导生成 · 仅供参考</p>
       </div>
     </div>
@@ -216,7 +244,7 @@ export default function Home() {
   const [dockOpen, setDockOpen] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   const [showTrips, setShowTrips] = useState(false)
-  const [trips, setTrips] = useState<{ id: number; city: string; days: number; preference: string; bundle_text: string; created_at: string }[]>([])
+  const [trips, setTrips] = useState<{ id: number; city: string; days: number; preference: string; bundle_text: string; budget_text?: string; created_at: string }[]>([])
   const [tripsLoading, setTripsLoading] = useState(false)
   const [expandedTrip, setExpandedTrip] = useState<number | null>(null)
   const [cityInput, setCityInput] = useState('')
@@ -1061,7 +1089,7 @@ export default function Home() {
           </div>
 
           {/* 方案 Tab + 内容 */}
-          <TripDetailBody bundleText={tripDetail.bundle_text} />
+          <TripDetailBody bundleText={tripDetail.bundle_text} budgetText={(tripDetail as any).budget_text} />
         </div>
       )}
 
