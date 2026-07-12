@@ -1670,7 +1670,7 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             "1. select：用户说的编号或名称与列表某项明确匹配（名称相近也算）。\n"
             "2. search_add：用户明确要添加某个【具体景点名称】但不在列表中。注意：'我想去X旅游''我要去X''去X看看'里X是城市/地区名时不算search_add，应归chitchat。\n"
             "3. done：选完景点，进入下一步选餐厅（含'餐厅''吃饭''火锅''好了''下一步'等）。\n"
-            "4. refresh：要换一批景点看（含偏好调整如'有没有自然景区''换个博物馆'）。\n"
+            "4. refresh：要换一批景点看（含偏好调整如'有没有自然景区''换个博物馆'）。若用户说保留某些项（'刚才第一个留着''除了X其他换'），在 keep_indices 字段填保留的1-based编号列表，否则省略该字段。\n"
             "5. query_intro：想了解列表中某景点的介绍/特色。\n"
             "6. query_realtime：想查列表中某景点的实时状态（人多/开放/排队等）。\n"
             "7. back：返回上一步重新选交通方式。\n"
@@ -1681,6 +1681,7 @@ def _plan_sub_intent(text: str, state: str, pois: list[dict]) -> dict:
             '{"intent":"search_add","target":"武侯祠"}\n'
             '{"intent":"done"}\n'
             '{"intent":"refresh","preference":"自然景区"}\n'
+            '{"intent":"refresh","preference":"","keep_indices":[1]}  ← 换一批但保留第1个\n'
             '{"intent":"query_intro","target":"景点名"}\n'
             '{"intent":"query_realtime","target":"景点名"}\n'
             '{"intent":"back"}\n'
@@ -1951,7 +1952,20 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
 
         if intent == "refresh":
             pref = sub.get("preference", preference)
-            send_text(open_kfid, user_id, "换一批景点，稍等～")
+            keep_indices = sub.get("keep_indices", [])  # 1-based，用户要保留的景点
+            # 把要保留的景点先存入 selection
+            if keep_indices:
+                keep_pois = [attractions[i-1] for i in keep_indices if 1 <= i <= len(attractions)]
+                sel = plan_get(user_id, "selection") or {}
+                already = sel.get("attractions", [])
+                for p in keep_pois:
+                    if not any(a["name"] == p["name"] for a in already):
+                        already.append(p)
+                plan_set(user_id, "selection", {"attractions": already, "restaurants": []})
+                keep_names = "、".join(p["name"] for p in keep_pois)
+                send_text(open_kfid, user_id, f"好，「{keep_names}」先保留，换一批其他景点，稍等～")
+            else:
+                send_text(open_kfid, user_id, "换一批景点，稍等～")
             threading.Thread(target=_show_attractions, args=(open_kfid, user_id, city, pref), daemon=True).start()
             return
 
@@ -1990,7 +2004,10 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
             selected_pois = [attractions[i] for i in indices if i < len(attractions)]
             # Python 层保护：只在文本里没有任何明确数字编号时才怀疑 DeepSeek 猜错了
             import re as _re
-            has_explicit_num = bool(_re.search(r'\d', text))  # 用户说了数字就信任编号
+            has_explicit_num = bool(
+                _re.search(r'\d', text) or  # 阿拉伯数字
+                _re.search(r'第[一二三四五六七八九十]|[一二三四五六七八九十][个号]', text)  # 中文序数词
+            )
             text_no_num = _re.sub(r'[\d\s，、和跟还有]', '', text)
             selected_names_in_text = any(p["name"] in text or any(c in text for c in p["name"] if len(c) > 1)
                                          for p in selected_pois)
