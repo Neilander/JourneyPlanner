@@ -1988,13 +1988,13 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
                 send_text(open_kfid, user_id, "没看清你选了哪些～发编号（如「1 3」）或景点名都行")
                 return
             selected_pois = [attractions[i] for i in indices if i < len(attractions)]
-            # Python 层保护：如果选中的 POI 名称都没出现在用户文本里，且用户文本包含非数字内容，
-            # 说明 DeepSeek 猜错了，转为 search_add
+            # Python 层保护：只在文本里没有任何明确数字编号时才怀疑 DeepSeek 猜错了
             import re as _re
+            has_explicit_num = bool(_re.search(r'\d', text))  # 用户说了数字就信任编号
             text_no_num = _re.sub(r'[\d\s，、和跟还有]', '', text)
             selected_names_in_text = any(p["name"] in text or any(c in text for c in p["name"] if len(c) > 1)
                                          for p in selected_pois)
-            if text_no_num and not selected_names_in_text and len(text_no_num) >= 2:
+            if not has_explicit_num and text_no_num and not selected_names_in_text and len(text_no_num) >= 2:
                 # 提取用户可能想要的景点名（去掉动词前缀）
                 cleaned = _re.sub(r'^(帮我|把|将|加|添加|加入|规划|我要|我想|我|去|也)', '', text_no_num)
                 cleaned = _re.sub(r'(加入规划|加到规划|规划进去|加进来|也加上)$', '', cleaned).strip()
