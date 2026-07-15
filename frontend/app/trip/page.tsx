@@ -89,7 +89,8 @@ function parseBundle(raw: string): Block[][] {
   }
 
   if (current.length > 0) plans.push(current)
-  return plans.filter(p => p.length > 0)
+  // 过滤掉没有 day_header 或 time_block 的空方案（防止 DeepSeek 开场白被当作方案1）
+  return plans.filter(p => p.some(b => b.type === 'day_header' || b.type === 'time_block'))
 }
 
 // ── Block 渲染 ────────────────────────────────────────────────────

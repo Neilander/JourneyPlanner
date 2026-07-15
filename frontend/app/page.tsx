@@ -124,7 +124,7 @@ function parseBundle(raw: string): TripBlock[][] {
     cur.push({ type: 'text', text: stripMd(line) })
   }
   if (cur.length) plans.push(cur)
-  return plans.filter(p => p.length > 0)
+  return plans.filter(p => p.some(b => b.type === 'day_header' || b.type === 'time_block'))
 }
 
 function TripBlockView({ block }: { block: TripBlock }) {
