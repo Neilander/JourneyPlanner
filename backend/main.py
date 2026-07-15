@@ -583,11 +583,12 @@ def baidu_asr(audio_bytes: bytes) -> str | None:
         print(f"[baidu_asr] error: {e}")
         return None
 
-def parse_hotel_image(image_bytes: bytes) -> dict | None:
+def parse_hotel_image(image_bytes: bytes, ocr_text: str = "") -> dict | None:
     """OCR截图文字 → DeepSeek提取酒店结构化信息"""
     if not image_bytes:
         return None
-    ocr_text = baidu_ocr(image_bytes)
+    if not ocr_text:
+        ocr_text = baidu_ocr(image_bytes)
     if not ocr_text:
         print("parse_hotel_image: OCR returned empty")
         return None
@@ -615,6 +616,130 @@ def amap_geocode(name: str, city: str) -> tuple[float, float] | tuple[None, None
     except Exception as e:
         print("geocode error:", e)
     return None, None
+
+# ── 票务/酒店信息解析 & 到店路线 ─────────────────────────────────────────────
+
+_TICKET_KEYWORDS = {
+    "车次", "高铁", "动车", "列车", "火车", "航班", "机票", "登机", "到达", "抵达",
+    "出发", "检票", "候车", "候机", "行程单", "订单号", "座位", "车厢", "机场",
+    "酒店", "民宿", "入住", "退房", "预订", "房间号", "客房",
+}
+
+def _looks_like_ticket(text: str) -> bool:
+    return sum(1 for k in _TICKET_KEYWORDS if k in text) >= 2
+
+_TICKET_PARSE_PROMPT = """从用户分享的票务/酒店信息里提取关键字段，只返回JSON，缺失字段留空字符串。
+
+{
+  "type": "flight|train|hotel|mixed",
+  "transport_number": "",   // 航班号（如CA1234）或车次（如G1234）
+  "arrival_city": "",       // 到达城市（如成都、北京）
+  "arrival_station": "",    // 到达站/机场全称（如成都东站、成都天府国际机场）
+  "arrival_time": "",       // 到达时间 HH:MM 格式（如14:30），不含日期
+  "arrival_date": "",       // 到达日期 YYYY-MM-DD 格式
+  "hotel_name": "",         // 酒店/民宿名称
+  "hotel_address": "",      // 酒店地址
+  "check_in_date": ""       // 入住日期 YYYY-MM-DD
+}"""
+
+def parse_ticket_info(text: str) -> dict:
+    """用 DeepSeek 从票务/酒店文本里提取结构化信息"""
+    if not DEEPSEEK_KEY:
+        return {}
+    try:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
+            json={"model": "deepseek-chat", "max_tokens": 200,
+                  "messages": [{"role": "system", "content": _TICKET_PARSE_PROMPT},
+                                {"role": "user",   "content": text}]},
+            timeout=10
+        ).json()
+        return json.loads(r["choices"][0]["message"]["content"].strip())
+    except Exception as e:
+        print(f"[parse_ticket_info] error: {e}")
+        return {}
+
+def _geocode_station_or_hotel(name: str, address: str, city: str):
+    """先按名称+地址搜，失败再按名称搜"""
+    if address:
+        lat, lng = amap_geocode(address, city)
+        if lat:
+            return lat, lng
+    if name:
+        lat, lng = amap_geocode(name, city)
+        if lat:
+            return lat, lng
+    return None, None
+
+def generate_arrival_route(info: dict) -> str:
+    """根据票务信息生成到店路线文案"""
+    city           = info.get("arrival_city", "")
+    station        = info.get("arrival_station", "")
+    hotel_name     = info.get("hotel_name", "")
+    hotel_address  = info.get("hotel_address", "")
+    arrival_time   = info.get("arrival_time", "")
+    arrival_date   = info.get("arrival_date", "")
+    transport_num  = info.get("transport_number", "")
+
+    if not station:
+        return ""
+    if not hotel_name and not hotel_address:
+        return ""
+
+    # 解析坐标
+    slat, slng = amap_geocode(station, city)
+    if not slat:
+        return f"找不到「{station}」的位置，请手动导航到酒店～"
+
+    hlat, hlng = _geocode_station_or_hotel(hotel_name, hotel_address, city)
+    if not hlat:
+        return f"找不到「{hotel_name or hotel_address}」的位置，请手动导航～"
+
+    # 同时查公交 + 打车
+    import concurrent.futures as _cf
+    with _cf.ThreadPoolExecutor(max_workers=2) as ex:
+        f_transit = ex.submit(amap_transit_detail, slat, slng, hlat, hlng, city)
+        f_driving = ex.submit(amap_driving_minutes, slat, slng, hlat, hlng)
+        transit_total, transit_walk = f_transit.result()
+        driving_min = f_driving.result()
+
+    # 组织标题行
+    header_parts = []
+    if transport_num:
+        header_parts.append(transport_num)
+    if arrival_date:
+        header_parts.append(arrival_date)
+    if arrival_time:
+        header_parts.append(f"到达 {arrival_time}")
+    header = "  ".join(header_parts)
+
+    lines = [f"🗺️ {station} → {hotel_name or hotel_address}"]
+    if header:
+        lines.append(f"📅 {header}")
+    lines.append("")
+
+    if transit_total:
+        lines.append(f"🚇 公共交通：约 {int(transit_total)} 分钟")
+        if transit_walk:
+            lines.append(f"   （含步行约 {int(transit_walk)} 分钟）")
+    if driving_min:
+        lines.append(f"🚕 打车/自驾：约 {int(driving_min)} 分钟")
+    if not transit_total and not driving_min:
+        lines.append("⚠️ 路线查询失败，请手动导航")
+
+    if arrival_time and transit_total:
+        # 估算到酒店时间
+        try:
+            h, m = map(int, arrival_time.split(":"))
+            total_min = h * 60 + m + int(transit_total) + 20  # +20 分钟取行李/出站
+            arr_h, arr_m = divmod(total_min % (24 * 60), 60)
+            lines.append(f"\n⏱️ 预计 {arr_h}:{arr_m:02d} 前后可入住（含出站取行李约20分钟）")
+        except Exception:
+            pass
+
+    lines.append(f"\n💡 建议提前在地图导航 App 搜索「{hotel_name or hotel_address}」")
+    return "\n".join(lines)
 
 # ── 意图识别 ──────────────────────────────────────────────────────────────────
 
@@ -645,6 +770,7 @@ INTENT_SYSTEM = """你是意图分类器。判断用户消息属于哪种意图�
 - attraction_recommend: 用户想知道某城市/目的地有哪些值得去的景点或餐厅，但不要求完整行程规划。例："成都有什么好玩的""推荐几个西安必去的地方""北京适合亲子的景点""成都好吃的在哪"
 - plan_trip           : 用户明确要求规划/安排一次具体行程，通常包含天数或行程安排意图。例："帮我规划成都三天""西安两天怎么安排""给我做个行程表"。必填字段：target(城市)、days(天数，默认2)、preference(偏好关键词，可为空)
 - my_trips            : 用户想查看/找回自己的历史行程或之前生成的行程链接。例："我的行程""查看历史行程""之前的规划在哪""帮我找行程链接""行程记录"
+- travel_info         : 用户分享了高铁票、机票、酒店订单等出行凭证，想知道如何从到达站/机场前往酒店的路线。识别信号：同时出现2个以上票务关键词（车次/航班/高铁/动车/机票/登机/到达/候车/候机/检票/座位/车厢/酒店/入住/退房/预订）。
 - chitchat            : 旅行咨询或其他闲聊
 
 优先级说明（有歧义时）：
@@ -664,7 +790,8 @@ INTENT_SYSTEM = """你是意图分类器。判断用户消息属于哪种意图�
 {"intent": "attraction_recommend", "target": "成都", "preference": "亲子"}
 {"intent": "plan_trip", "target": "成都", "days": 3, "preference": "历史美食"}
 {"intent": "my_trips"}
-{"intent": "import"}"""
+{"intent": "import"}
+{"intent": "travel_info"}"""
 
 def _do_save_hotel(open_kfid: str, user_id: str, user: dict, ctrip: dict, raw_text: str, hotel_count: int):
     """实际执行酒店入库、城市更新、分析触发、回复用户。"""
@@ -715,6 +842,9 @@ def classify_intent(text: str, msgtype: str) -> tuple[str, str, dict]:
     # 2. 含酒店链接 → import
     if re.search(r'https?://', text) and any(k in text for k in HOTEL_DOMAINS):
         return ("import", "", {})
+    # 2c. 票务文本快速识别
+    if _looks_like_ticket(text):
+        return ("travel_info", "", {})
     # 2b. 查历史行程关键词快速识别
     _MY_TRIPS_KW = {"我的行程", "历史行程", "历史规划", "找行程", "行程记录", "之前的行程",
                     "之前的规划", "找回行程", "行程链接", "查行程", "我的规划记录"}
@@ -1020,7 +1150,22 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
         if miniprogram:
             ctrip = parse_miniprogram(miniprogram)
         elif image_bytes:
-            ctrip = parse_hotel_image(image_bytes)
+            # 先 OCR，再判断是票务截图还是酒店截图
+            ocr_text = baidu_ocr(image_bytes) or ""
+            if _looks_like_ticket(ocr_text):
+                # 走票务路线
+                def _handle_ticket_img():
+                    ticket_info = parse_ticket_info(ocr_text)
+                    route_text = generate_arrival_route(ticket_info)
+                    if route_text:
+                        send_text(open_kfid, user_id, route_text)
+                    else:
+                        send_text(open_kfid, user_id,
+                            "收到票务截图，但没能识别到出发地和目的地酒店信息 🤔\n\n"
+                            "可以直接告诉我：「我从XXX站到XXX酒店，怎么走？」")
+                threading.Thread(target=_handle_ticket_img, daemon=True).start()
+                return
+            ctrip = parse_hotel_image(image_bytes, ocr_text=ocr_text)
             if not ctrip:
                 send_text(open_kfid, user_id,
                     "收到截图，不过我没能从中识别出酒店信息 🤔\n\n"
@@ -1251,6 +1396,21 @@ def handle_user_message(open_kfid: str, user_id: str, text: str, msgtype: str,
                 f"还没有行程记录～\n\n"
                 f"跟我说「帮我规划X天成都行程」，生成后会自动保存 🗺️\n\n"
                 f"你的专属页面：{base_url}")
+        return
+
+    # 分支：票务/酒店信息 → 生成到店路线
+    if intent == "travel_info" and msgtype == "text":
+        send_text(open_kfid, user_id, "收到行程信息，正在帮你规划从到达站/机场到酒店的路线 🗺️ 稍等～")
+        def _handle_ticket_text():
+            ticket_info = parse_ticket_info(text)
+            route_text = generate_arrival_route(ticket_info)
+            if route_text:
+                send_text(open_kfid, user_id, route_text)
+            else:
+                send_text(open_kfid, user_id,
+                    "没能识别到完整的出发地和目的地酒店信息 🤔\n\n"
+                    "可以直接告诉我：「我从XXX站到XXX酒店，怎么走？」")
+        threading.Thread(target=_handle_ticket_text, daemon=True).start()
         return
 
     # 分支C-1：景点实时情况查询
@@ -1931,6 +2091,25 @@ def handle_plan_selection(open_kfid: str, user_id: str, text: str):
     # ── 抵达信息采集 ──────────────────────────────────────────────────────────
     if state == "selecting_arrival":
         skip_kw = {"跳过", "不确定", "随便", "全天", "不知道", "说不准", "skip"}
+        # 如果用户分享了票务信息，直接解析并额外推送到店路线
+        if _looks_like_ticket(text):
+            ticket_info = parse_ticket_info(text)
+            if ticket_info.get("arrival_time"):
+                meta["arrival_time"]   = ticket_info.get("arrival_time", "")
+                meta["departure_from"] = ticket_info.get("arrival_station") or ticket_info.get("arrival_city", "")
+                meta["departure_type"] = {"flight": "飞机", "train": "高铁"}.get(ticket_info.get("type", ""), "")
+                plan_set(user_id, "meta", meta)
+                plan_set(user_id, "state", "selecting_attractions")
+                send_text(open_kfid, user_id,
+                    f"识别到行程信息 ✅ 抵达时间 {meta['arrival_time']}，帮你查{city}景点～\n（到站→酒店路线稍后推送）")
+                # 异步：生成到店路线 + 展示景点
+                def _ticket_arrival_tasks():
+                    route_text = generate_arrival_route(ticket_info)
+                    if route_text:
+                        send_text(open_kfid, user_id, route_text)
+                    _show_attractions(open_kfid, user_id, city, preference)
+                threading.Thread(target=_ticket_arrival_tasks, daemon=True).start()
+                return
         if any(k in text for k in skip_kw):
             plan_set(user_id, "state", "selecting_attractions")
             send_text(open_kfid, user_id, f"好的，按全天规划！帮你查{city}景点，稍等～ 🗺️")
